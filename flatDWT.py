@@ -1,7 +1,8 @@
 '''flatDWT
 Created: September 29, 2016
 
-This script must be able to detect if a flat is acceptable inmediatly after exposure
+This script must be able to detect if a flat is acceptable inmediatly after 
+exposure
 Use dflats tagged as bad in FLAT_QA 
 Use cropped pieces of code from flatStat and decam_test
 
@@ -83,7 +84,7 @@ class Toolbox():
         if len(Zscore[Zscore>3.5])>0:
             for k in range(0,imlayer.shape[0]):
                 for m in range(0,imlayer.shape[1]):
-                    if np.abs( cte*(imlayer[k,m]-np.median(flat_im))/MAD ) >3.5:
+                    if np.abs( cte*(imlayer[k,m]-np.median(flat_im))/MAD )>3.5:
                         imlayer[k,m] = np.nan
             return imlayer
         else:
