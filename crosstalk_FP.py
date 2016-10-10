@@ -135,9 +135,9 @@ class ManageCCD():
         arrays inside an object
         To define the pytables, all arrays inside a column must has the same
         dimension. I need to store Science and Guide/Focus ccds separately
-        * DATASEC{A/B}, BIASSEC{A/B}, and PRESEC{A/B}: all shares the same dimension
-        on dim1 (separately for Sci and Technical ccds), and inside each section
-        shares the same dimension in dim2
+        * DATASEC{A/B}, BIASSEC{A/B}, and PRESEC{A/B}: all shares the same 
+        dimension on dim1 (separately for Sci and Technical ccds), and inside 
+        each section shares the same dimension in dim2
         - datasec:(4096,1024),(20148,1024)
         - biassec:(4096,50),(2048,50)
         - presec:(4096,6),(2048,6)
@@ -194,15 +194,19 @@ class ManageCCD():
         class Record(tables.IsDescription):
             ccdnum = tables.Int32Col() #32-bit integer
             flag_amp = tables.Int32Col()#StringCol(10) #-1/1: A/B amplifiers
-            datasec = tables.Float32Col(shape=(share_D1,share_data_D2)) #single prec
+            datasec = tables.Float32Col(shape=(share_D1,share_data_D2))
             biassec = tables.Float32Col(shape=(share_D1,share_bias_D2))
             presec = tables.Float32Col(shape=(share_D1,share_pre_D2))
             postsec = tables.Float32Col(shape=(share_bias_D2,share_data_D2))
             if tech_ccd:
-                datasec_tec = tables.Float32Col(shape=(share_D1_tech,share_data_D2))
-                biassec_tec = tables.Float32Col(shape=(share_D1_tech,share_bias_D2))
-                presec_tec = tables.Float32Col(shape=(share_D1_tech,share_pre_D2))
-                postsec_tec =tables.Float32Col(shape=(share_bias_D2,share_data_D2))
+                datasec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_data_D2))
+                biassec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_bias_D2)) 
+                presec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_pre_D2))
+                postsec_tec =tables.Float32Col(shape=(share_bias_D2,
+                                                share_data_D2))
         h5file = tables.open_file('fp_prextalk.h5', mode = 'w',
                                   title = 'FP sections',
                                   driver='H5FD_CORE',
@@ -337,6 +341,7 @@ class ManageCCD():
         pix_scale = np.mean([M_header['PIXSCAL1'],M_header['PIXSCAL2']])
         date_obs = M_header['DATE-OBS'][:M_header['DATE-OBS'].find('T')]
         fp_size = Auxiliary.dim_str(M_header['detsize'])
+        cls.detsize = fp_size
 
         '''Extensions runs from 0 to 70, where 0 is the non-data
         default extension. The division is:
@@ -352,6 +357,7 @@ class ManageCCD():
         #arrays of data has longer axis as rows (vertical)
         fp_data = [[M_hdu[i].read_header()['ccdnum'],M_hdu[i].read()]
                    for i in xrange(1,n_ext+1)]
+        cls.fp_data_list = fp_data
 
         '''whatever the order of the dictionary/list of columns, the
         DataFrame initializes using a alphabetical sort of the col-names
@@ -365,10 +371,10 @@ class ManageCCD():
         key_ls.sort(key=lambda x: x.lower())
         #lowercase is only for sorting, not permanent
 
-        df_key = pd.DataFrame(columns=key_ls)
+        cls.df_key = pd.DataFrame(columns=key_ls)
         for h in xrange(1,n_ext+1):
             aux_row = [M_hdu[h].read_header()[kw] for kw in key_ls]
-            df_key.loc[len(df_key)] = aux_row
+            cls.df_key.loc[len(cls.df_key)] = aux_row
             '''here is assumed the sortinf pandas make with
             the DF column names, and such sorting must be
             equivalent to key_ls.sort()
@@ -383,45 +389,63 @@ class ManageCCD():
         2) crosscorr(): apply correction CCD by CCD
         '''
         df_cross,cols_cross = Correction.open_corr(cross_file)
-        Correction.crosscorr(fp_data,df_cross,cols_cross)
+        Correction.crosscorr(cls.fp_data_list,df_cross,cols_cross)
 
         print ('-fp_data size in the system: {0:.3F} kB'.
-               format(sys.getsizeof(fp_data)/1024.))
+               format(sys.getsizeof(cls.fp_data_list)/1024.))
         
         '''Split by amplifier.
         FIX because need to be performed with the crosstalked arrays
         '''
-        preXt_tab,df_sec = ManageCCD.split_amp(fp_data,df_key)
+        preXt_tab,df_sec = ManageCCD.split_amp(cls.fp_data_list,cls.df_key)
+        cls.preXt = preXt_tab
+        preXt_tab = None
         fp_data = None
         gc.collect()
 
         '''Here: extract overscan
         '''
 
-
         #sizes
         print ('-df_key/df_cross size in the system: {0:.3F}/{1:.3F} kB'.
-               format(sys.getsizeof(df_key)/1024.,
+               format(sys.getsizeof(cls.df_key)/1024.,
                sys.getsizeof(df_cross)/1024.))
         print ('-preXt_tab size in the system: {0:.3F} kB'.
-               format(sys.getsizeof(preXt_tab)/1024.))
+               format(sys.getsizeof(cls.preXt)/1024.))
 
+        #close HDU
+        M_hdu.close()
+        #
+        return False
 
-        #---------------------------------
-        '''Even when Binary Search is better, the method 
+    @classmethod
+    def focal_array(cls):
+        '''Method to construct a big array containing all the CCDs in its
+        spatial position in the detector.
+        Even when Binary Search is better, the method 
         Table.will_query_use_indexing(condition_used_in_where) get as result 
         that this query wouldn't be indexed
         '''
         t1 = time.time()
-        iter_row = preXt_tab.row
-        aux_fp = np.zeros((fp_size[1],fp_size[0]),dtype=float)
+        #iter_row = preXt_tab.row
+        iter_row = ManageCCD.preXt
+        #aux_fp = np.zeros((fp_size[1],fp_size[0]),dtype=float)
+        aux_fp = np.zeros((ManageCCD.detsize[1],ManageCCD.detsize[0]),
+                        dtype=float)
         max_r,max_c = 0,0
-        for iter_row in preXt_tab:
+        #for iter_row in preXt_tab:
+        for iter_row in ManageCCD.preXt:
             tmp_ccd = iter_row['ccdnum']
-            pos1a = Auxiliary.range_str(df_key.loc[df_key['ccdnum']==tmp_ccd,
-                                                   'detseca'].values[0])
-            pos1b = Auxiliary.range_str(df_key.loc[df_key['ccdnum']==tmp_ccd,
-                                                   'detsecb'].values[0])
+            #pos1a = Auxiliary.range_str(df_key.loc[df_key['ccdnum']==tmp_ccd,
+            #                                       'detseca'].values[0])
+            #pos1b = Auxiliary.range_str(df_key.loc[df_key['ccdnum']==tmp_ccd,
+            #                                       'detsecb'].values[0])
+            pos1a = Auxiliary.range_str(ManageCCD.df_key.loc[
+                                        ManageCCD.df_key['ccdnum']==tmp_ccd,
+                                        'detseca'].values[0])
+            pos1b = Auxiliary.range_str(ManageCCD.df_key.loc[
+                                        ManageCCD.df_key['ccdnum']==tmp_ccd,
+                                        'detseca'].values[0])
             if pos1a[3] > max_r: max_r = pos1a[3]
             if pos1a[1] > max_c: max_c = pos1a[1]
             if pos1b[3] > max_r: max_r = pos1b[3]
@@ -433,17 +457,9 @@ class ManageCCD():
         #shrink to the effective data size
         aux_fp = aux_fp[:max_r+1,:max_c+1]
         t2 = time.time()
-        
         print ('\n\t(*)Elapsed time filling FP screenshot: {0:.3f}\'\n'.
                format((t2-t1)/60.))
-        #---------------------------------
-
-        #close HDU
-        M_hdu.close()
-        #
-        return False
-
-
+        return aux_fp
 
         #ToDo:
         #1) extract any keyword value, CCD by CCD --done
@@ -464,6 +480,7 @@ if __name__=='__main__':
     ManageCCD.open_file(path+fname,path+crossname)
     t02 = time.time(); print '\telapsed: {0:.3f}\''.format((t02-t01)/60.)
 
+    ManageCCD.focal_array()
 
     print 'EXITING.....'; exit()
     print '\nOpening corrections' #; time.sleep(0.5)
