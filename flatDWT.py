@@ -231,14 +231,14 @@ class Coeff(DWT):
         print 'set table'
         class Level():
             c_A = tables.Float32Col(shape=DWT().cmlshape[0])
-            c_1 = tables.Float32Col(shape=DWT().cmlshape[1])
-            c_2 = tables.Float32Col(shape=DWT().cmlshape[2])
-            c_3 = tables.Float32Col(shape=DWT().cmlshape[3]) 
-            c_4 = tables.Float32Col(shape=DWT().cmlshape[4])
-            c_5 = tables.FLoat32Col(shape=DWT().cmlshape[5])
-            c_6 = tables.Float32Col(shape=DWT().cmlshape[6])
-            c_7 = tables.Float32Col(shape=DWT().cmlshape[7])
-            c_8 = tables.Float32Col(shape=DWT().cmlshape[8])
+            c1 = tables.Float32Col(shape=DWT().cmlshape[1])
+            c2 = tables.Float32Col(shape=DWT().cmlshape[2])
+            c3 = tables.Float32Col(shape=DWT().cmlshape[3]) 
+            c4 = tables.Float32Col(shape=DWT().cmlshape[4])
+            c5 = tables.FLoat32Col(shape=DWT().cmlshape[5])
+            c6 = tables.Float32Col(shape=DWT().cmlshape[6])
+            c7 = tables.Float32Col(shape=DWT().cmlshape[7])
+            c8 = tables.Float32Col(shape=DWT().cmlshape[8])
         cls.h5file = tables.open_file(str_tname,mode='w',
                                     title='DWT multilevel decomposition',
                                     driver='H5FD_CORE')
@@ -253,14 +253,14 @@ class Coeff(DWT):
         #fills multi-level DWT with N=8
         for m in range(3):
             Coeff.cml_row['c_A'] = coeff_tuple[0]
-            Coeff.cml_row['c_1'] = coeff_tuple[1][m]
-            Coeff.cml_row['c_2'] = coeff_tuple[2][m]
-            Coeff.cml_row['c_3'] = coeff_tuple[3][m]
-            Coeff.cml_row['c_4'] = coeff_tuple[4][m]
-            Coeff.cml_row['c_5'] = coeff_tuple[5][m]
-            Coeff.cml_row['c_6'] = coeff_tuple[6][m]
-            Coeff.cml_row['c_7'] = coeff_tuple[7][m]
-            Coeff.cml_row['c_8'] = coeff_tuple[8][m]
+            Coeff.cml_row['c1'] = coeff_tuple[1][m]
+            Coeff.cml_row['c2'] = coeff_tuple[2][m]
+            Coeff.cml_row['c3'] = coeff_tuple[3][m]
+            Coeff.cml_row['c4'] = coeff_tuple[4][m]
+            Coeff.cml_row['c5'] = coeff_tuple[5][m]
+            Coeff.cml_row['c6'] = coeff_tuple[6][m]
+            Coeff.cml_row['c7'] = coeff_tuple[7][m]
+            Coeff.cml_row['c8'] = coeff_tuple[8][m]
             Coeff.cml_row.append() 
 
     @classmethod
@@ -304,7 +304,6 @@ if __name__=='__main__':
     Coeff.set_table('dwt_ID.h5')
     #fill table
     Coeff.fill_table(c_ml)
-    
     #close table
     Coeff.close_table()
     
