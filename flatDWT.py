@@ -147,8 +147,6 @@ class FPSci():
         #call the module and then assign
         xtalk_fp.ManageCCD.open_file(path_fits,path_xtalk)
         self.fp_sci = xtalk_fp.ManageCCD.focal_array()
-
-
         
 
 class FP_array():
