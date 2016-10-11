@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import fitsio
 import pywt
 import crosstalk_FP as xtalk_fp
+import tables
 
 class TestCCD():
     '''methods for loading single CCDs, for testing
@@ -216,6 +217,7 @@ class DWT():
                 cls.cml_shape.append(c_ml[i].shape)
             else:
                 cls.cml_shape.append(cml_shape[i][0].shape)
+        print cls.cml_shape
         return c_ml
 
 
