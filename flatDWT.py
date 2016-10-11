@@ -219,7 +219,6 @@ class DWT():
             else:
                 aux_shape.append(c_ml[i][0].shape)
         cls.cmlshape = aux_shape
-        print '!!!!!!!!!!!!!',cls.cmlshape
         return c_ml
 
 
@@ -228,40 +227,47 @@ class Coeff(DWT):
     '''
     @classmethod
     def set_table(cls,str_tname):
-        print 'set table'
-        class Level():
-            c_A = tables.Float32Col(shape=DWT().cmlshape[0])
-            c1 = tables.Float32Col(shape=DWT().cmlshape[1])
-            c2 = tables.Float32Col(shape=DWT().cmlshape[2])
-            c3 = tables.Float32Col(shape=DWT().cmlshape[3]) 
-            c4 = tables.Float32Col(shape=DWT().cmlshape[4])
-            c5 = tables.FLoat32Col(shape=DWT().cmlshape[5])
-            c6 = tables.Float32Col(shape=DWT().cmlshape[6])
-            c7 = tables.Float32Col(shape=DWT().cmlshape[7])
-            c8 = tables.Float32Col(shape=DWT().cmlshape[8])
-        cls.h5file = tables.open_file(str_tname,mode='w',
-                                    title='DWT multilevel decomposition',
-                                    driver='H5FD_CORE')
+        print 'try 1 \t',DWT.cmlshape
+        print 'try 2 \t',DWT().cmlshape
+        
+        class DWTLevel():
+            print 'setting'
+            c_A = tables.Float32Col(shape=DWT.cmlshape[0])
+            c1 = tables.Float32Col(shape=DWT.cmlshape[1])
+            c2 = tables.Float32Col(shape=DWT.cmlshape[2])
+            c3 = tables.Float32Col(shape=DWT.cmlshape[3]) 
+            c4 = tables.Float32Col(shape=DWT.cmlshape[4])
+            #coef5 = tables.Float32Col(shape=DWT.cmlshape[5])
+            c6 = tables.Float32Col(shape=DWT.cmlshape[6])
+            c7 = tables.Float32Col(shape=DWT.cmlshape[7])
+            c8 = tables.Float32Col(shape=DWT.cmlshape[8])
+        print 'creating table 123'
+        h5file = tables.open_file(str_tname,mode='w',
+                                title='DWT multilevel decomposition')
+        #driver='H5FD_CORE')
         #driver_core_backing_store=0)
-        group = cls.h5file.create_group('/','coefficients','DWT coefficients')
-        cls.cml_table = cls.h5file.create_table(group,'DWTcoeffs',
-                                                Level,'DWT coeff N=8')
-        cls.cml_row = cml_table.row
-    
+        #coeff: group name, DWT coeff: brief description
+        group = h5file.create_group('/','coeff','DWT coeff')
+        #FP: table name, FP wavelet decomposition:ttable title
+        cml_table = h5file.create_table(group,'FP',DWTLevel,'Wavedec')
+        cls.h5file = h5file
+        cls.cml_table = cml_table
+
     @classmethod
     def fill_table(cls,coeff_tuple):
         #fills multi-level DWT with N=8
+        cml_row = Coeff.cml_table.row0
         for m in range(3):
-            Coeff.cml_row['c_A'] = coeff_tuple[0]
-            Coeff.cml_row['c1'] = coeff_tuple[1][m]
-            Coeff.cml_row['c2'] = coeff_tuple[2][m]
-            Coeff.cml_row['c3'] = coeff_tuple[3][m]
-            Coeff.cml_row['c4'] = coeff_tuple[4][m]
-            Coeff.cml_row['c5'] = coeff_tuple[5][m]
-            Coeff.cml_row['c6'] = coeff_tuple[6][m]
-            Coeff.cml_row['c7'] = coeff_tuple[7][m]
-            Coeff.cml_row['c8'] = coeff_tuple[8][m]
-            Coeff.cml_row.append() 
+            cml_row['c_A'] = coeff_tuple[0]
+            cml_row['c1'] = coeff_tuple[1][m]
+            cml_row['c2'] = coeff_tuple[2][m]
+            cml_row['c3'] = coeff_tuple[3][m]
+            cml_row['c4'] = coeff_tuple[4][m]
+            #Coeff.cml_row['coeff5'] = coeff_tuple[5][m]
+            cml_row['c6'] = coeff_tuple[6][m]
+            cml_row['c7'] = coeff_tuple[7][m]
+            cml_row['c8'] = coeff_tuple[8][m]
+            cml_row.append() 
 
     @classmethod
     def close_table(cls):
@@ -287,14 +293,14 @@ if __name__=='__main__':
     #to route to file on flat_qa, import easyaccess
     #ccd by ccd single epoch flats 
     #desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
-
+    '''
     print '\tstarting DWT'
     t1 = time.time()
     c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
     t2 = time.time()
     print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
                                                                     /60.)
-    
+    '''
     print '\tstarting DWT multilevel'
     t1 = time.time()
     c_ml = DWT.multi_level(whole_fp,Nlev=8)
