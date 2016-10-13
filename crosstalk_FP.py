@@ -45,8 +45,25 @@ class Auxiliary():
 
     @classmethod
     def range_str(cls,str_range):
+        '''return the indices (x-1), as integer 
+        '''
         str_range = str_range.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, str_range)
+
+
+class UpdateHeader():
+    '''Updates GAIN, SATURATE LEVEL, and (...) on the header
+    '''
+    def __init__(self):
+        gc.collect()
+    
+    @classmethod 
+    def calc_gain():
+        return False
+
+    @classmethod
+    def write_param():
+        return False
 
 
 class Correction():
@@ -65,16 +82,42 @@ class Correction():
         return tmp_tab,columns
 
     @classmethod
-    def crosscorr(cls,fp_raw,df_coeff,cols_coeff,ccd_init=1,ccd_end=62):
+    def crosscorr(cls,fp_raw,df_coeff,cols_coeff,df_key,ccd_init=1,ccd_end=62):
         '''Performs crosstalk on CCDs 1-62 (because for those we have
         coefficients)
         Coeficients will be harbored on a NDim array (not pytables), and the
         resulting corrected coeffs will be passed to a list (to not worry about
         dimensions)
         The coeffs matix (NDIM) needs to be carefully constructed
+
+        NOTE: if a subset of CCDs are selected, is better to use a similar
+        method but not this
         '''
         print '\t(+)Empty method {0}, on class: {1}.\n\t(+)File: {2}'.format(
             sys._getframe().f_code.co_name,cls.__name__,__file__)
+        print 'Initial/Final CCD number: {0}/{1}'.format(ccd_init,ccd_end)
+        #look at the entire ccd, not only datasec
+        '''make the simplest version and when working, then improve
+        this method is so slow! (about 2 minutes) so improve its
+        performance! (maybe merge with other method?)
+        '''
+        t1 = time.time()
+        for C in xrange(pixel.shape[1]):
+            for R in xrange(pixel.shape[0]):
+                #for ccd,AB_amp,pixel in fp_raw:
+                #    locout = C*pixel.shape[0]+R
+                #    xtalkcorr = 0
+                #    #if column in A and AB
+                #    #Auxiliary.in_range()
+                #    #if column in A and BA
+        t2 = time.time()
+        print 'option 2: {0}'.format((t2-t1)/60.)
+
+        key_ls = ['detsec','detseca','detsecb',
+                'dataseca','datasecb','biasseca','biassecb',
+                'preseca','presecb','postseca','postsecb',
+                'ccdnum','extname']
+        print 'here tic toc'
         return False
         
 class ManageCCD():
@@ -112,7 +155,7 @@ class ManageCCD():
                                        'del1','del2','del3','del4',
                                        'dim1','dim2'])
         for kword in aux_slice:
-            for j in range(len(df_delim[kword])):
+            for j in xrange(len(df_delim[kword])):
                 aux_sl = Auxiliary.range_str(df_delim.loc[j,kword])
                 tmp_df = pd.DataFrame({'ccdnum':df_delim.loc[j,'ccdnum'],
                                        'section':kword,
@@ -221,7 +264,7 @@ class ManageCCD():
         non_used_ccd = []
         t1 = time.time()
         for M in xrange(len(pix_arr)):
-            ID_pix,ARR_pix = pix_arr[M]
+            ID_pix,AB_pix,ARR_pix = pix_arr[M]
             #cut in pieces for A and B
             if (ID_pix <= 62 and ID_pix >= 1):
                 #Amplifier A
@@ -351,45 +394,58 @@ class ManageCCD():
         To read data: hdu[ext][:,:] or hdu[ext].read()
         To read header keys: hdu[ext].read_header()['key']
         '''
-        #data sections and brief description
-        #do i need focus/guider ccds for crosstalk correction?
-        #fp_data is a list of [int,array]
-        #arrays of data has longer axis as rows (vertical)
-        fp_data = [[M_hdu[i].read_header()['ccdnum'],M_hdu[i].read()]
-                   for i in xrange(1,n_ext+1)]
-        cls.fp_data_list = fp_data
 
         '''whatever the order of the dictionary/list of columns, the
         DataFrame initializes using a alphabetical sort of the col-names
         The list is sorted using lowercase, because uppercase goes first
         for sorting
         '''
+        #data sections and brief description
+        #do i need focus/guider ccds for crosstalk correction?
+        #fp_data is a list of [int,array]
+        #arrays of data has longer axis as rows (vertical)
+        #fp_data = [[M_hdu[i].read_header()['ccdnum'],M_hdu[i].read()]
+        #           for i in xrange(1,n_ext+1)]
+        #cls.fp_data_list = fp_data
+        
         key_ls = ['detsec','detseca','detsecb',
                   'dataseca','datasecb','biasseca','biassecb',
                   'preseca','presecb','postseca','postsecb',
                   'ccdnum','extname']
         key_ls.sort(key=lambda x: x.lower())
         #lowercase is only for sorting, not permanent
-
         cls.df_key = pd.DataFrame(columns=key_ls)
+
+        fp_data = []
         for h in xrange(1,n_ext+1):
-            aux_row = [M_hdu[h].read_header()[kw] for kw in key_ls]
-            cls.df_key.loc[len(cls.df_key)] = aux_row
-            '''here is assumed the sortinf pandas make with
+            '''here is assumed the sorting pandas make with
             the DF column names, and such sorting must be
             equivalent to key_ls.sort()
             '''
+            aux_row = [M_hdu[h].read_header()[kw] for kw in key_ls]
+            cls.df_key.loc[len(cls.df_key)] = aux_row
+            
+            tmp_A = Auxiliary.range_str(M_hdu[h].read_header()['dataseca'])
+            tmp_B = Auxiliary.range_str(M_hdu[h].read_header()['datasecb'])
+            if tmp_A[0] < tmp_B[0]: AB_order = 1
+            else: AB_order = -1
+            fp_data.append([M_hdu[h].read_header()['ccdnum'],
+                            AB_order,
+                            M_hdu[h].read()])
+        cls.fp_data_list = fp_data
+
         t2 = time.time()
         print ('\n\t(*)Elapsed time in loading FITS: {0:.3f}\'\n'.
                format((t2-t1)/60.))
-
 
         '''HERE: make crosstalk corrections
         1) open_corr(): open the file with the coeffs
         2) crosscorr(): apply correction CCD by CCD
         '''
         df_cross,cols_cross = Correction.open_corr(cross_file)
-        Correction.crosscorr(cls.fp_data_list,df_cross,cols_cross)
+        Correction.crosscorr(cls.fp_data_list,df_cross,cols_cross,cls.df_key)
+
+        print '\n================exiting after crosscorr'; exit()
 
         print ('-fp_data size in the system: {0:.3F} kB'.
                format(sys.getsizeof(cls.fp_data_list)/1024.))
