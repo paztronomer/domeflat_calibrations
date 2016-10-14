@@ -49,8 +49,19 @@ class Auxiliary():
         '''
         str_range = str_range.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, str_range)
-
-
+    
+    @classmethod
+    def section_del(cls,dframe,ccdnum,datasec):
+        aux_delim = [dframe.loc[(dframe['ccdnum']==ccdnum) &
+                        (dframe['section']==datasec),'del1'].values[0],
+                    dframe.loc[(dframe['ccdnum']==ccdnum) &
+                        (dframe['section']==datasec),'del2'].values[0]+1,
+                    dframe.loc[(dframe['ccdnum']==ccdnum) &
+                        (dframe['section']==datasec),'del3'].values[0],
+                    dframe.loc[(dframe['ccdnum']==ccdnum) &
+                        (dframe['section']==datasec),'del4'].values[0]+1]
+        return aux_delim
+ 
 class UpdateHeader():
     '''Updates GAIN, SATURATE LEVEL, and (...) on the header
     '''
@@ -66,7 +77,7 @@ class UpdateHeader():
         return False
 
 
-class Correction():
+class Corr():
     def __init__(self):
         gc.collect()
         
@@ -77,12 +88,59 @@ class Correction():
         '''
         columns = ('victim','source','x','x_err','src_nl',
                    'p_coeff_a','p_coeff_b','p_coeff_c')
-        tmp_tab = pd.read_csv(cross_filename,sep='\s*',comment='#',
-                              names=columns,engine='python')
-        return tmp_tab,columns
+        tmp = pd.read_csv(cross_filename,sep='\s*',comment='#',
+                        names=columns,engine='python')
+        ccd_vict = [int(x[x.find('ccd')+3:x.find('ccd')+5]) for x in tmp['victim'].values]
+        ccd_sour = [int(x[x.find('ccd')+3:x.find('ccd')+5]) for x in tmp['source'].values]
+        amp_vict = [x[-1] for x in tmp['victim'].values]
+        amp_sour = [x[-1] for x in tmp['source'].values]
+
+        tmp.drop(['victim','source'],axis=1,inplace=True)
+        tmp.loc[:,'victim_ccd'] = pd.Series(ccd_vict,index=tmp.index)
+        tmp.loc[:,'source_ccd'] = pd.Series(ccd_sour,index=tmp.index)
+        tmp.loc[:,'victim_amp'] = pd.Series(amp_vict,index=tmp.index)
+        tmp.loc[:,'source_amp'] = pd.Series(amp_sour,index=tmp.index)
+        cls.XT = tmp 
+        return tmp
 
     @classmethod
-    def crosscorr(cls,fp_raw,df_coeff,cols_coeff,df_key,ccd_init=1,ccd_end=62):
+    def crosscorr(cls,ID_pix,AB_order,CCD_pix,AB_sec,deg3_poly=True):
+        '''This method applies the coeffs
+        - ID_pix: ccd number
+        - AB_order: amplifier readout order, AB:1, BA:-1
+        - CCD_pix: array of the entire ccd
+        - AB_sec: delimiters for datasec [A[],B[]]
+        We don't check A and B has same dimensions
+        '''
+        #idx_victA = Corr.XT.loc[(Corr.XT['victim_ccd']==ID_pix)]
+        #print idx_victA; exit()
+        if deg3_poly:
+            #more pedestrian mode. After implementy and work, refine it!!!!
+            '''AS FAR AS I SEE, THE ORIGINAL METHOD DO NOT APPLY
+            CORRECTIONS BETWEEN DIFFERENT CCDS
+            '''
+            A = CCD_pix[AB_sec[0][0]:AB_sec[0][1],AB_sec[0][2]:AB_sec[0][3]]
+            B = CCD_pix[AB_sec[1][0]:AB_sec[1][1],AB_sec[1][2]:AB_sec[1][3]]
+            for R in xrange(A.shape[0]):
+                for C in xrange(A.shape[1]):
+                    #1st for amplifier A
+                    locout = C*A.shape[0]+R
+                    if AB_order == 1:       
+                        locA = locout
+                        locB = C*A.shape[0]+(A.shape[0]-R-1.)
+                        if  
+
+
+                    elif AB_order == -1:
+                        locA = C*A.shape[0]+(A.shape[0]-R-1.)
+                        locB = locout
+        else:
+            pass
+            #
+            #HERE apply the linear corrections
+            #
+
+        #(cls,fp_raw,df_coeff,cols_coeff,df_key,ccd_init=1,ccd_end=62):
         '''Performs crosstalk on CCDs 1-62 (because for those we have
         coefficients)
         Coeficients will be harbored on a NDim array (not pytables), and the
@@ -96,22 +154,7 @@ class Correction():
         print '\t(+)Empty method {0}, on class: {1}.\n\t(+)File: {2}'.format(
             sys._getframe().f_code.co_name,cls.__name__,__file__)
         print 'Initial/Final CCD number: {0}/{1}'.format(ccd_init,ccd_end)
-        #look at the entire ccd, not only datasec
-        '''make the simplest version and when working, then improve
-        this method is so slow! (about 2 minutes) so improve its
-        performance! (maybe merge with other method?)
-        '''
-        t1 = time.time()
-        for C in xrange(pixel.shape[1]):
-            for R in xrange(pixel.shape[0]):
-                #for ccd,AB_amp,pixel in fp_raw:
-                #    locout = C*pixel.shape[0]+R
-                #    xtalkcorr = 0
-                #    #if column in A and AB
-                #    #Auxiliary.in_range()
-                #    #if column in A and BA
-        t2 = time.time()
-        print 'option 2: {0}'.format((t2-t1)/60.)
+        #run at every step, this is more an auxiliary method
 
         key_ls = ['detsec','detseca','detsecb',
                 'dataseca','datasecb','biasseca','biassecb',
@@ -125,7 +168,216 @@ class ManageCCD():
         gc.collect()
         
     @classmethod
-    def split_amp(cls,pix_arr,df_delim,tech_ccd=False):
+    def split_amp(cls,pix_arr,df_delim,tech_ccd=False,do_correction=True):
+        '''Receives a set of pixel arrays (with all the available data)
+        and a set of delimiters from which we get the boundaries of
+        ccd, overscan, postscan, etc
+        - DATASEC{A,B} image section
+        - BIASSEC{A,B} overscan section
+        - PRESEC{A,B} prescan section
+        - POSTSEC{A,B} postscan section
+        Here the same dictionary as OpenFile() is employed
+        Is NOT the same sectioning for all the CCDs. Is the same shape but not
+        same sectioning.
+        Pandas documentation recommend optimized data access .at, .iat, .loc,
+        .iloc and .ix
+        It's important that auxiliary list for sectioning only contain
+        sectioning info
+        NOTE: even when physically CCDs are horizontal (larger axis is columns),
+        after readout the longer axis is vertical (rows)
+        '''
+        aux_slice = ['dataseca','datasecb','biasseca','biassecb',
+                     'preseca','presecb','postseca','postsecb']
+        aux_slice.sort(key=lambda x: x.lower())
+
+        '''Create a DF to harbor delimiters and shapes for each ccd, per section
+        When created, free space from the initial DF. As CCD orientation changes
+        from header to readout, I switched del{1,2,3,4}
+        '''
+        df_ind = pd.DataFrame(columns=['ccdnum','section',
+                                       'del1','del2','del3','del4',
+                                       'dim1','dim2'])
+        for kword in aux_slice:
+            for j in xrange(len(df_delim[kword])):
+                aux_sl = Auxiliary.range_str(df_delim.loc[j,kword])
+                tmp_df = pd.DataFrame({'ccdnum':df_delim.loc[j,'ccdnum'],
+                                       'section':kword,
+                                       'del1':aux_sl[2],'del2':aux_sl[3],
+                                       'del3':aux_sl[0],'del4':aux_sl[1],
+                                       'dim1':np.abs(aux_sl[3]+1-aux_sl[2]),
+                                       'dim2':np.abs(aux_sl[1]+1-aux_sl[0])},
+                                      index=[0])
+                df_ind = df_ind.append(tmp_df)
+        #to force as integers
+        df_ind[['ccdnum','del1','del2','del3','del4',
+                'dim1','dim2']] = df_ind[['ccdnum','del1','del2','del3','del4',
+                                          'dim1','dim2']].astype(int)
+        df_ind = df_ind.reset_index()
+        df_ind = df_ind.drop('index', axis=1)
+        df_delim = None
+
+        '''Up to here there is a DF (df_ind) storing indices and dimensions for
+        the focalplane cropping. Now I need to make the ccd crop and store these
+        arrays inside an object
+        To define the pytables, all arrays inside a column must has the same
+        dimension. I need to store Science and Guide/Focus ccds separately
+        * DATASEC{A/B}, BIASSEC{A/B}, and PRESEC{A/B}: all shares the same 
+        dimension on dim1 (separately for Sci and Technical ccds), and inside 
+        each section shares the same dimension in dim2
+        - datasec:(4096,1024),(20148,1024)
+        - biassec:(4096,50),(2048,50)
+        - presec:(4096,6),(2048,6)
+        - postsec:(50,1024)
+        The following variables stores the dimensions of each section, after
+        verify these dimensions are unique. We could have put these values
+        by hand, but this way is more robust
+        '''
+        #HERE
+        #Put a condition for CCDs to be extracted, because following conditions
+        #will change
+        if (len(df_ind.loc[(df_ind['section']=='dataseca')
+                           & (df_ind['ccdnum']<=62),'dim1']
+                .drop_duplicates().values) == 1):
+            share_D1 = int(df_ind.loc[(df_ind['section']=='dataseca')
+                                      & (df_ind['ccdnum']<=62),'dim1']
+                           .drop_duplicates().values[0]) #4096
+        else:
+            print '(!)Error in shared DIM1 (Science)'; exit()
+            
+        if tech_ccd:
+            if (len(df_ind.loc[(df_ind['section']=='dataseca')
+                               & (df_ind['ccdnum']>=63),'dim1']
+                    .drop_duplicates().values) == 1):
+                share_D1_tech = int(df_ind.loc[(df_ind['section']=='dataseca')
+                                               & (df_ind['ccdnum']>=63),'dim1']
+                                    .drop_duplicates().values[0]) #2048
+            else:
+                print '(!)Error in shared DIM1 (Technical)'; exit()
+        else:
+            pass
+        
+        if ( (len(df_ind.loc[df_ind['section']=='dataseca','dim2']
+                  .drop_duplicates().values) == 1) and
+             (len(df_ind.loc[df_ind['section']=='biasseca','dim2']
+                  .drop_duplicates().values) == 1) and
+             (len(df_ind.loc[df_ind['section']=='preseca','dim2']
+                  .drop_duplicates().values) == 1) ):
+            share_data_D2 = int(df_ind.loc[df_ind['section']=='dataseca','dim2']
+                                .drop_duplicates().values[0]) #1024
+            share_bias_D2 = int(df_ind.loc[df_ind['section']=='biasseca','dim2']
+                                .drop_duplicates().values[0]) #50
+            share_pre_D2 = int(df_ind.loc[df_ind['section']=='preseca','dim2']
+                               .drop_duplicates().values[0]) #6
+        else:
+            print '(!)Error in shared DIM2'; exit()
+
+
+        '''Define pytables using the above dimensions and fill it up
+        The config: driver="H5FD_CORE",
+                    driver_core_backing_store=0
+        prevents to save a copy of the table on disk
+        '''
+        class Record(tables.IsDescription):
+            ccdnum = tables.Int32Col() #32-bit integer
+            flag_amp = tables.Int32Col()#StringCol(10) #-1/1: A/B amplifiers
+            datasec = tables.Float32Col(shape=(share_D1,share_data_D2))
+            biassec = tables.Float32Col(shape=(share_D1,share_bias_D2))
+            presec = tables.Float32Col(shape=(share_D1,share_pre_D2))
+            postsec = tables.Float32Col(shape=(share_bias_D2,share_data_D2))
+            if tech_ccd:
+                datasec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_data_D2))
+                biassec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_bias_D2)) 
+                presec_tec = tables.Float32Col(shape=(share_D1_tech,
+                                                share_pre_D2))
+                postsec_tec =tables.Float32Col(shape=(share_bias_D2,
+                                                share_data_D2))
+        h5file = tables.open_file('fp_prextalk.h5', mode = 'w',
+                                  title = 'FP sections',
+                                  driver='H5FD_CORE',
+                                  driver_core_backing_store=0)
+        group = h5file.create_group('/','pixels','CCD sections')
+        table = h5file.create_table(group,'preXtalk',Record,'Pre-crosstalk')
+        fp_row = table.row
+
+        '''Fill up Science (1-62) & Technical (63-64,69-74) CCDs sections.
+        One row for each amplifier, then 2 lines per CCD. It's verbose...
+        '''
+        non_used_ccd = []
+        t1 = time.time()
+        for M in xrange(len(pix_arr)):
+            ID_pix,AB_pix,ARR_pix = pix_arr[M]
+            #cut in pieces for A and B
+            if (ID_pix <= 62 and ID_pix >= 1):
+                data_A = Auxiliary.section_del(df_ind,ID_pix,'dataseca')
+                bias_A =  Auxiliary.section_del(df_ind,ID_pix,'biasseca')
+                pre_A = Auxiliary.section_del(df_ind,ID_pix,'preseca')
+                post_A = Auxiliary.section_del(df_ind,ID_pix,'postseca')
+                data_B = Auxiliary.section_del(df_ind,ID_pix,'datasecb')
+                bias_B =  Auxiliary.section_del(df_ind,ID_pix,'biassecb')
+                pre_B = Auxiliary.section_del(df_ind,ID_pix,'presecb')
+                post_B = Auxiliary.section_del(df_ind,ID_pix,'postsecb')
+                #if do_correction, then apply corrections for A and B separately
+                 
+                #Amplifier A
+                fp_row['ccdnum'] = ID_pix
+                fp_row['flag_amp'] = -1
+                fp_row['biassec'] = ARR_pix[bias_A[0]:bias_A[1],bias_A[2]:bias_A[3]]
+                fp_row['presec'] = ARR_pix[pre_A[0]:pre_A[1],pre_A[2]:pre_A[3]]
+                fp_row['postsec'] = ARR_pix[post_A[0]:post_A[1],post_A[2]:post_A[3]]
+
+                if do_correction:
+                    #for amplifier A
+                    fp_row['datasec'] = Corr.crosscorr(ID_pix,AB_pix,
+                                                    ARR_pix,[data_A,data_B])
+                    
+                #make it effective
+                fp_row.append()
+                
+                #Amplifier B
+                fp_row['ccdnum'] = ID_pix
+                fp_row['flag_amp'] = 1
+                fp_row['biassec'] = ARR_pix[bias_B[0]:bias_B[1],bias_B[2]:bias_B[3]]
+                fp_row['presec'] = ARR_pix[pre_B[0]:pre_B[1],pre_B[2]:pre_B[3]]
+                fp_row['postsec'] = ARR_pix[post_B[0]:post_B[1],post_B[2]:post_B[3]]
+                
+                fp_row['datasec'] = ARR_pix[data_B[0]:data_B[1],data_B[2]:data_B[3]]
+                #make it effective
+                fp_row.append()
+            elif (tech_ccd and ID_pix >= 63):
+                #HERE FILL THE TECHNICAL CCDs
+                pass
+            else:
+                non_used_ccd.append(ID_pix)
+        if len(non_used_ccd) > 0:
+            non_used_ccd.sort()
+            print ('-CCDs will not be crosstalked: {0}'.
+                   format(non_used_ccd))
+        t2 = time.time()
+        print ('\n\t(*)Elapsed time in sectioning FP: {0:.3f}\'\n'.
+               format((t2-t1)/60.))
+        #h5file.close()
+        return table,df_ind
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    ##########################################BACKUP    
+    @classmethod
+    def backup_split_amp(cls,pix_arr,df_delim,tech_ccd=False):
         '''Receives a set of pixel arrays (with all the available data)
         and a set of delimiters from which we get the boundaries of
         ccd, overscan, postscan, etc
@@ -363,6 +615,21 @@ class ManageCCD():
                format((t2-t1)/60.))
         #h5file.close()
         return table,df_ind
+    ##########################################BACKUP    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     @classmethod
     def open_file(cls,filename,cross_file):
@@ -442,11 +709,8 @@ class ManageCCD():
         1) open_corr(): open the file with the coeffs
         2) crosscorr(): apply correction CCD by CCD
         '''
-        df_cross,cols_cross = Correction.open_corr(cross_file)
-        Correction.crosscorr(cls.fp_data_list,df_cross,cols_cross,cls.df_key)
-
-        print '\n================exiting after crosscorr'; exit()
-
+        df_cross = Corr.open_corr(cross_file)
+        
         print ('-fp_data size in the system: {0:.3F} kB'.
                format(sys.getsizeof(cls.fp_data_list)/1024.))
         
@@ -540,7 +804,7 @@ if __name__=='__main__':
 
     print 'EXITING.....'; exit()
     print '\nOpening corrections' #; time.sleep(0.5)
-    df_cross,cols_cross = Correction.open_corr(path+crossname)
+    df_cross,cols_cross = Corr.open_corr(path+crossname)
     t03 = time.time()
 
     print '\t(*)Total elapsed time: {0:.3f}\'\''.format((t03-t02))
