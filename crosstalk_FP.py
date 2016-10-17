@@ -87,11 +87,13 @@ class Corr():
         a tuple containing the column names
         '''
         columns = ('victim','source','x','x_err','src_nl',
-                   'p_coeff_a','p_coeff_b','p_coeff_c')
+                   'C1','C2','C3')
         tmp = pd.read_csv(cross_filename,sep='\s*',comment='#',
                         names=columns,engine='python')
-        ccd_vict = [int(x[x.find('ccd')+3:x.find('ccd')+5]) for x in tmp['victim'].values]
-        ccd_sour = [int(x[x.find('ccd')+3:x.find('ccd')+5]) for x in tmp['source'].values]
+        ccd_vict = [int(x[x.find('ccd')+3:x.find('ccd')+5]) 
+                    for x in tmp['victim'].values]
+        ccd_sour = [int(x[x.find('ccd')+3:x.find('ccd')+5]) 
+                    for x in tmp['source'].values]
         amp_vict = [x[-1] for x in tmp['victim'].values]
         amp_sour = [x[-1] for x in tmp['source'].values]
 
@@ -100,41 +102,63 @@ class Corr():
         tmp.loc[:,'source_ccd'] = pd.Series(ccd_sour,index=tmp.index)
         tmp.loc[:,'victim_amp'] = pd.Series(amp_vict,index=tmp.index)
         tmp.loc[:,'source_amp'] = pd.Series(amp_sour,index=tmp.index)
+        tmp.reset_index(inplace=True,drop=True)
         cls.XT = tmp 
         return tmp
 
     @classmethod
-    def crosscorr(cls,ID_pix,AB_order,CCD_pix,AB_sec,deg3_poly=True):
+    def crosscorr(cls,ID_pix,AB_order,CCD_pix,AB_sec,deg3_poly=True,ID_min=1,
+                ID_max=62):
         '''This method applies the coeffs
         - ID_pix: ccd number
         - AB_order: amplifier readout order, AB:1, BA:-1
         - CCD_pix: array of the entire ccd
         - AB_sec: delimiters for datasec [A[],B[]]
+        - deg3poly: degree 3 polynomial? if not, then linear
+        - ID_min/ID_max: min and max CCD numbers for lookup for corrections
         We don't check A and B has same dimensions
         '''
         #idx_victA = Corr.XT.loc[(Corr.XT['victim_ccd']==ID_pix)]
         #print idx_victA; exit()
+        
+        A = CCD_pix[AB_sec[0][0]:AB_sec[0][1],AB_sec[0][2]:AB_sec[0][3]]
+        B = CCD_pix[AB_sec[1][0]:AB_sec[1][1],AB_sec[1][2]:AB_sec[1][3]] 
+        
+        #victim
+        index = Corr.XT.loc[:,'victim_ccd'] == ID_pix
+        df_sel = Corr.XT[index]
+        df_sel.reset_index(inplace=True,drop=True)
+        #iterate over victim + source
+        for m in xrange(len(df_sel.index)):
+            #print m, type(m)
+            #print df_sel.iloc[m]
+            #print df_sel.iloc[m]['x']
+            if df_sel.iloc[m]['victim_amp'] == 'A':
+                if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    #READ CCD pixel by pixel or use a more intelligent way
+                    inpix = None #!!!!!!!!!!!!!!!!!!
+                    value = 0.
+                    if (df_sel.iloc[m]['src_nl'] > 0 and 
+                        inpix > df_sel.iloc[m]['src_nl']):
+                        for ind,elem in enumerate(['C1','C2','C3']):
+                            value += df_sel.iloc[m][elem]*np.power(inpix,ind+1)
+                        value += df_sel.iloc[m]['x'] * df_sel.iloc[m]['src_nl']
+                    else:
+                        value += df_sel.iloc[m]['x'] * inpix
+
+
+                elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    #READ CCD
+                    pass
+            elif df_sel.iloc[m]['victim_amp'] == 'B':
+                pass
+            else:
+                raise ValueError('Amplifier not defined as A/B on xtalk file')
+
         if deg3_poly:
-            #more pedestrian mode. After implementy and work, refine it!!!!
-            '''AS FAR AS I SEE, THE ORIGINAL METHOD DO NOT APPLY
-            CORRECTIONS BETWEEN DIFFERENT CCDS
-            '''
-            A = CCD_pix[AB_sec[0][0]:AB_sec[0][1],AB_sec[0][2]:AB_sec[0][3]]
-            B = CCD_pix[AB_sec[1][0]:AB_sec[1][1],AB_sec[1][2]:AB_sec[1][3]]
-            for R in xrange(A.shape[0]):
-                for C in xrange(A.shape[1]):
-                    #1st for amplifier A
-                    locout = C*A.shape[0]+R
-                    if AB_order == 1:       
-                        locA = locout
-                        locB = C*A.shape[0]+(A.shape[0]-R-1.)
-                        if  
-
-
-                    elif AB_order == -1:
-                        locA = C*A.shape[0]+(A.shape[0]-R-1.)
-                        locB = locout
+            pass
         else:
+            print 'linear correcions'
             pass
             #
             #HERE apply the linear corrections
@@ -153,7 +177,6 @@ class Corr():
         '''
         print '\t(+)Empty method {0}, on class: {1}.\n\t(+)File: {2}'.format(
             sys._getframe().f_code.co_name,cls.__name__,__file__)
-        print 'Initial/Final CCD number: {0}/{1}'.format(ccd_init,ccd_end)
         #run at every step, this is more an auxiliary method
 
         key_ls = ['detsec','detseca','detsecb',
