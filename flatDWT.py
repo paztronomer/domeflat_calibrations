@@ -1,7 +1,8 @@
 '''flatDWT
 Created: September 29, 2016
 
-This script must be able to detect if a flat is acceptable inmediatly after exposure
+This script must be able to detect if a flat is acceptable inmediatly after 
+exposure
 Use dflats tagged as bad in FLAT_QA 
 Use cropped pieces of code from flatStat and decam_test
 
@@ -21,6 +22,8 @@ import scipy.signal
 import matplotlib.pyplot as plt
 import fitsio
 import pywt
+import crosstalk_FP as xtalk_fp
+import tables
 
 class TestCCD():
     '''methods for loading single CCDs, for testing
@@ -50,7 +53,8 @@ class TestCCD():
 class Toolbox():
     '''methods to be inserted in other 
     '''
-    def detect_outlier(self,imlayer):
+    @classmethod
+    def detect_outlier(cls,imlayer):
         ''' Estimate Iglewicz and Hoaglin criteria for outlier 
         AND REPLACE BY MEDIAN OF VICINITY! Change this because we only
         want the values masked, not to replace them
@@ -83,13 +87,14 @@ class Toolbox():
         if len(Zscore[Zscore>3.5])>0:
             for k in range(0,imlayer.shape[0]):
                 for m in range(0,imlayer.shape[1]):
-                    if np.abs( cte*(imlayer[k,m]-np.median(flat_im))/MAD ) >3.5:
+                    if np.abs( cte*(imlayer[k,m]-np.median(flat_im))/MAD )>3.5:
                         imlayer[k,m] = np.nan
             return imlayer
         else:
             return imlayer
 
-    def quick_stat(self,arr_like):
+    @classmethod
+    def quick_stat(cls,arr_like):
         MAD = np.median( np.abs(arr_like-np.median(arr_like)) )
         print '__________'
         print '* Min | Max | Mean = {0} | {1} | {2}'.format(
@@ -101,7 +106,8 @@ class Toolbox():
             np.percentile(arr_like,.75))
         return False
 
-    def view_dwt(self,img_arr):
+    @classmethod
+    def view_dwt(cls,img_arr):
         '''Display all the availbale DWT (single level) for the input array  
         '''
         t1 = time.time()
@@ -131,18 +137,24 @@ class Toolbox():
         t2 = time.time()
         print ('\nTotal time in all {1} modes+mother wavelets: {0:.2f}\''
                .format((t2-t1)/60.,count))
-    
-class FPScience():
+
+
+class FPSci():
     '''methods for loading science focal plane (1-62), inherited 
     from crosstalk
     Maybe import crosstalk
     '''
-    pass
+    def __init__(self,path_fits,path_xtalk):
+        #call the module and then assign
+        xtalk_fp.ManageCCD.open_file(path_fits,path_xtalk)
+        self.fp_sci = xtalk_fp.ManageCCD.focal_array()
+        
 
-
-class FPAll():
+class FP_array():
     '''methods for loading the entire FP, inherited from crosstalk
     CCDs 1-62, 63-64, 65+74
+    Calls the crosstalk and loads the focal plane array into an
+    atribute
     '''
     pass
 
@@ -151,11 +163,12 @@ class DWT():
     '''methods for discrete WT of one level
     pywt.threshold
     '''
-    def cutlevel():
+    @classmethod
+    def cutlevel(cls):
         return False
     
-    
-    def single_level(self,img_arr,wvfunction='dmey',wvmode='symmetric'):
+    @classmethod
+    def single_level(cls,img_arr,wvfunction='dmey',wvmode='symmetric'):
         '''DISCRETE wavelet transform
         Wavelet families available: 'haar', 'db', 'sym', 'coif', 'bior', 
         'rbio','dmey'
@@ -187,8 +200,8 @@ class DWT():
         '''
         return c_A,c_H,c_V,c_D
         
-        
-    def multi_level(self,img_arr,wvfunction='dmey',wvmode='symmetric',Nlev=3):
+    @classmethod
+    def multi_level(cls,img_arr,wvfunction='dmey',wvmode='symmetric',Nlev=8):
         '''Wavelet Decomposition in multiple levels, opossed to DWT which is
         the wavelet transform of one level only
         - Nlev: number of level for WAVEDEC2 decomposition
@@ -197,21 +210,109 @@ class DWT():
         '''
         c_ml = pywt.wavedec2(img_arr,pywt.Wavelet(wvfunction),
                              wvmode,level=Nlev)
-        print 'Multilevel wavelet decomposition, N={0}'.format(len(c_ml)-1)
+        #list of tuples containing the shapes of every matrix level
+        #cls.cmlshape = []
+        aux_shape = []
+        for i in range(len(c_ml)):
+            if i == 0:
+                aux_shape.append(c_ml[i].shape)
+            else:
+                aux_shape.append(c_ml[i][0].shape)
+        cls.cmlshape = aux_shape
         return c_ml
+
+
+class Coeff(DWT):
+    '''method for save results of DWT on a compressed pytables
+    '''
+    @classmethod
+    def set_table(cls,str_tname):
+        print 'try 1 \t',DWT.cmlshape
+        print 'try 2 \t',DWT().cmlshape
+        
+        class Levels(tables.IsDescription):
+            c_A = tables.Float32Col(shape=DWT.cmlshape[0])
+            c1 = tables.Float32Col(shape=DWT.cmlshape[1])
+            c2 = tables.Float32Col(shape=DWT.cmlshape[2])
+            c3 = tables.Float32Col(shape=DWT.cmlshape[3]) 
+            c4 = tables.Float32Col(shape=DWT.cmlshape[4])
+            c5 = tables.Float32Col(shape=DWT.cmlshape[5])
+            c6 = tables.Float32Col(shape=DWT.cmlshape[6])
+            c7 = tables.Float32Col(shape=DWT.cmlshape[7])
+            c8 = tables.Float32Col(shape=DWT.cmlshape[8])
+        cls.h5file = tables.open_file(str_tname,mode='w',
+                                    title='DWT multilevel decomposition',
+                                    driver='H5FD_CORE')
+        #driver_core_backing_store=0)
+        #coeff: group name, DWT coeff: brief description
+        group = cls.h5file.create_group('/','coeff','DWT coeff')
+        #FP: table name, FP wavelet decomposition:ttable title
+        cls.cml_table = cls.h5file.create_table(group,'FP',Levels,'Wavedec')
+
+    @classmethod
+    def fill_table(cls,coeff_tuple):
+        #fills multi-level DWT with N=8
+        cml_row = Coeff.cml_table.row
+        for m in range(3):
+            cml_row['c_A'] = coeff_tuple[0]
+            cml_row['c1'] = coeff_tuple[1][m]
+            cml_row['c2'] = coeff_tuple[2][m]
+            cml_row['c3'] = coeff_tuple[3][m]
+            cml_row['c4'] = coeff_tuple[4][m]
+            cml_row['c5'] = coeff_tuple[5][m]
+            cml_row['c6'] = coeff_tuple[6][m]
+            cml_row['c7'] = coeff_tuple[7][m]
+            cml_row['c8'] = coeff_tuple[8][m]
+            cml_row.append() 
+
+    @classmethod
+    def close_table(cls):
+        Coeff.h5file.close()
 
 
 if __name__=='__main__':
     print 'main here'
+    #pudu branch
+
+    path = '/Users/fco/Code/shipyard_DES/raw_201608_hexa/'
+    fname = 'DECam_00565152.fits.fz'
+    crossname = 'DECam_20130606.xtalk'
+
+    #load crosstalk module ite returns a big 2D array
+    #fp.ManageCCD.open_file(path+fname,path+crossname)
+    #whole_fp = fp.ManageCCD.focal_array()
+    whole_fp = FPSci(path+fname,path+crossname).fp_sci
 
     #only one ccdnum=21
-    path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
-    fname = path+'DECam_00565285_21.fits'
+    #path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
+    #fname = path+'DECam_00565285_21.fits'
     #to route to file on flat_qa, import easyaccess
-    #ccd by ccd single epoch flats desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
-
-    auxFn = TestCCD()
-    header,img = auxFn.opentest(fname)
-    dwt_a = DWT()
-    dwt_a.single_level(img[:,:])
-    dwt_a.multi_level(img[:,:])
+    #ccd by ccd single epoch flats 
+    #desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
+    '''
+    print '\tstarting DWT'
+    t1 = time.time()
+    c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
+    t2 = time.time()
+    print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
+                                                                    /60.)
+    '''
+    print '\tstarting DWT multilevel'
+    t1 = time.time()
+    c_ml = DWT.multi_level(whole_fp,Nlev=8)
+    t2 = time.time()
+    print '\n\tElapsed time in DWT in 8 levels: {0:.2f}\''.format((t2-t1)
+                                                                /60.)
+    #init table
+    Coeff.set_table('dwt_ID.h5')
+    #fill table
+    Coeff.fill_table(c_ml)
+    #close table
+    Coeff.close_table()
+    
+    #exit()
+    #auxFn = TestCCD()
+    #header,img = auxFn.opentest(fname)
+    #dwt_a = DWT()
+    #dwt_a.single_level(img[:,:])
+    #dwt_a.multi_level(img[:,:])
