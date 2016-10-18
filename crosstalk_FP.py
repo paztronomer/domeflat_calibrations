@@ -18,7 +18,7 @@ IMPORTANT!
     on a second stage, the functions will be replaced by the imsupport ones
     when imsupport be already in python
     - REMEMBER TO ADD AS MUCH FREEDOM AS POSSIBLE TO THE USER
-
+    - test changinf fp_list for a set()
 Methods from imsupport and argutils
 '''
 
@@ -107,84 +107,139 @@ class Corr():
         return tmp
 
     @classmethod
-    def crosscorr(cls,ID_pix,AB_order,CCD_pix,AB_sec,deg3_poly=True,ID_min=1,
-                ID_max=62):
-        '''This method applies the coeffs
+    def crosscorr(cls,FP_a,df_D,ID_pix,AB_order,AMP_pix,deg3_poly=True):
+        '''Performs crosstalk on CCDs 1-62 (because for those we have
+        coefficients)
+        NOTE: if a subset of CCDs are selected, is better to use a similar
+        method but not this
+        This method applies the coeffs
         - ID_pix: ccd number
         - AB_order: amplifier readout order, AB:1, BA:-1
-        - CCD_pix: array of the entire ccd
-        - AB_sec: delimiters for datasec [A[],B[]]
+        - CCD_pix: array of the datasec to be corrected (only A or B)
         - deg3poly: degree 3 polynomial? if not, then linear
         - ID_min/ID_max: min and max CCD numbers for lookup for corrections
         We don't check A and B has same dimensions
+
+        Columns of crosstalk coeffs: 'victim_ccd','victim_amp','source_ccd',
+        'source_amp','x','x_err','src_nl','C1','C2','C3'
         '''
         #idx_victA = Corr.XT.loc[(Corr.XT['victim_ccd']==ID_pix)]
         #print idx_victA; exit()
-        
-        A = CCD_pix[AB_sec[0][0]:AB_sec[0][1],AB_sec[0][2]:AB_sec[0][3]]
-        B = CCD_pix[AB_sec[1][0]:AB_sec[1][1],AB_sec[1][2]:AB_sec[1][3]] 
-        
+        outdata = np.zeros(shape=AMP_pix.shape)
+        outdata[:,:] = np.nan
+
         #victim
         index = Corr.XT.loc[:,'victim_ccd'] == ID_pix
         df_sel = Corr.XT[index]
         df_sel.reset_index(inplace=True,drop=True)
         #iterate over victim + source
         for m in xrange(len(df_sel.index)):
-            #print m, type(m)
-            #print df_sel.iloc[m]
-            #print df_sel.iloc[m]['x']
+            gc.collect()
+            #if CCD victim is Amp A
             if df_sel.iloc[m]['victim_amp'] == 'A':
+                #source CCD in this line of dataframe
+                src_ind = [row[0] 
+                         for row in FP_a].index(df_sel.iloc[m]['source_ccd'])
+
+                if df_sel.iloc[m]['source_amp'] == 'A': data_sect = 'dataseca'
+                else: data_sect = 'datasecb'
+                XY = Auxiliary.section_del(df_D,ID_pix,data_sect)
+                SRC_pix = FP_a[src_ind][2][XY[0]:XY[1],XY[2]:XY[3]]
+                #
+                print '\t{0}-{1} ({2})'.format(df_sel.iloc[m]['victim_ccd'],
+                                            df_sel.iloc[m]['victim_amp'],
+                                            AB_order)
+                #
                 if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
                     #READ CCD pixel by pixel or use a more intelligent way
-                    inpix = None #!!!!!!!!!!!!!!!!!!
+                    '''here the criteria must be applied to all pixels in the 
+                    source image. When criteria is reached, the xtalkcorrection
+                    must be applied to the equivalent pixel in the victim image
+                    Take into account the AB/BA order to find the equivalent 
+                    pixel
+                    '''
+                    print 'check 1'
+                    t1 = time.time()
+                    #inpix is source data
+                    inpix = None
+                    for col in xrange(SRC_pix.shape[1]):
+                        for line in xrange(SRC_pix.shape[0]):
+                            print line,col
+                            inpix = SRC_pix[line,col]
+                            value = 0.
+                            if (df_sel.iloc[m]['src_nl'] > 0 and 
+                                inpix > df_sel.iloc[m]['src_nl']):
+                                for ind,elem in enumerate(['C1','C2','C3']):
+                                    value += (df_sel.iloc[m][elem]* 
+                                            np.power(inpix,ind+1))
+                                value += (df_sel.iloc[m]['x']*
+                                        df_sel.iloc[m]['src_nl'])
+                            else:
+                                value += df_sel.iloc[m]['x']*inpix
+                            #outdata is the victim data
+                            outdata[line,col] -= value
+                    t2 = time.time()
+                    print '\t\t{0:.3f}'.format((t2-t1)/60.)
+                    '''
                     value = 0.
                     if (df_sel.iloc[m]['src_nl'] > 0 and 
                         inpix > df_sel.iloc[m]['src_nl']):
                         for ind,elem in enumerate(['C1','C2','C3']):
                             value += df_sel.iloc[m][elem]*np.power(inpix,ind+1)
-                        value += df_sel.iloc[m]['x'] * df_sel.iloc[m]['src_nl']
+                        value += df_sel.iloc[m]['x']*df_sel.iloc[m]['src_nl']
                     else:
                         value += df_sel.iloc[m]['x'] * inpix
+                    '''
 
-
+                #apply corrections on amp A of source, if order is BA
                 elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
                     #READ CCD
                     pass
-            elif df_sel.iloc[m]['victim_amp'] == 'B':
-                pass
+
+            elif df_sel.iloc[m]['victim_amp'] == 'B': 
+                src_ind = [row[0] 
+                         for row in FP_a].index(df_sel.iloc[m]['source_ccd'])
+
+                if df_sel.iloc[m]['source_amp'] == 'A': data_sect = 'dataseca'
+                else: data_sect = 'datasecb'
+                XY = Auxiliary.section_del(df_D,ID_pix,data_sect)
+                SRC_pix = FP_a[src_ind][2][XY[0]:XY[1],XY[2]:XY[3]]
+                #
+                print '\t{0}-{1} ({2})'.format(df_sel.iloc[m]['victim_ccd'],
+                                            df_sel.iloc[m]['victim_amp'],
+                                            AB_order)
+                #
+                if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    print 'check 2'
+                    t1 = time.time()
+                    inpix = None
+                    for col in xrange(SRC_pix.shape[1]):
+                        for line in xrange(SRC_pix.shape[0]):
+                            inpix = SRC_pix[line,col]
+                            value = 0.
+                            if (df_sel.iloc[m]['src_nl'] > 0 and 
+                                inpix > df_sel.iloc[m]['src_nl']):
+                                for ind,elem in enumerate(['C1','C2','C3']):
+                                    value += (df_sel.iloc[m][elem]* 
+                                            np.power(inpix,ind+1))
+                                value += (df_sel.iloc[m]['x']*
+                                        df_sel.iloc[m]['src_nl'])
+                            else:
+                                value += df_sel.iloc[m]['x']*inpix
+                            outdata[line,col] -= value
+                    t2 = time.time()
+                    print '\t\t{0:.3f}'.format((t2-t1)/60.)
+                elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    #READ CCD
+                    pass
             else:
                 raise ValueError('Amplifier not defined as A/B on xtalk file')
 
-        if deg3_poly:
-            pass
-        else:
-            print 'linear correcions'
-            pass
-            #
-            #HERE apply the linear corrections
-            #
 
-        #(cls,fp_raw,df_coeff,cols_coeff,df_key,ccd_init=1,ccd_end=62):
-        '''Performs crosstalk on CCDs 1-62 (because for those we have
-        coefficients)
-        Coeficients will be harbored on a NDim array (not pytables), and the
-        resulting corrected coeffs will be passed to a list (to not worry about
-        dimensions)
-        The coeffs matix (NDIM) needs to be carefully constructed
-
-        NOTE: if a subset of CCDs are selected, is better to use a similar
-        method but not this
-        '''
         print '\t(+)Empty method {0}, on class: {1}.\n\t(+)File: {2}'.format(
             sys._getframe().f_code.co_name,cls.__name__,__file__)
         #run at every step, this is more an auxiliary method
-
-        key_ls = ['detsec','detseca','detsecb',
-                'dataseca','datasecb','biasseca','biassecb',
-                'preseca','presecb','postseca','postsecb',
-                'ccdnum','extname']
-        print 'here tic toc'
-        return False
+        return outdata
         
 class ManageCCD():
     def __init__(self):
@@ -330,6 +385,7 @@ class ManageCCD():
         non_used_ccd = []
         t1 = time.time()
         for M in xrange(len(pix_arr)):
+            print 'check split_amp'
             ID_pix,AB_pix,ARR_pix = pix_arr[M]
             #cut in pieces for A and B
             if (ID_pix <= 62 and ID_pix >= 1):
@@ -349,12 +405,12 @@ class ManageCCD():
                 fp_row['biassec'] = ARR_pix[bias_A[0]:bias_A[1],bias_A[2]:bias_A[3]]
                 fp_row['presec'] = ARR_pix[pre_A[0]:pre_A[1],pre_A[2]:pre_A[3]]
                 fp_row['postsec'] = ARR_pix[post_A[0]:post_A[1],post_A[2]:post_A[3]]
-
                 if do_correction:
                     #for amplifier A
-                    fp_row['datasec'] = Corr.crosscorr(ID_pix,AB_pix,
-                                                    ARR_pix,[data_A,data_B])
-                    
+                    fp_row['datasec'] = Corr.crosscorr(pix_arr,df_ind,ID_pix,
+                                                    AB_pix,
+                                                    ARR_pix[data_A[0]:data_A[1],
+                                                    data_A[2]:data_A[3]])
                 #make it effective
                 fp_row.append()
                 
@@ -364,8 +420,12 @@ class ManageCCD():
                 fp_row['biassec'] = ARR_pix[bias_B[0]:bias_B[1],bias_B[2]:bias_B[3]]
                 fp_row['presec'] = ARR_pix[pre_B[0]:pre_B[1],pre_B[2]:pre_B[3]]
                 fp_row['postsec'] = ARR_pix[post_B[0]:post_B[1],post_B[2]:post_B[3]]
-                
-                fp_row['datasec'] = ARR_pix[data_B[0]:data_B[1],data_B[2]:data_B[3]]
+                if do_correction:
+                    #for amplifier B
+                    fp_row['datasec'] = Corr.crosscorr(pix_arr,df_ind,ID_pix,
+                                                    AB_pix,
+                                                    ARR_pix[data_B[0]:data_B[1],
+                                                    data_B[2]:data_B[3]])
                 #make it effective
                 fp_row.append()
             elif (tech_ccd and ID_pix >= 63):
