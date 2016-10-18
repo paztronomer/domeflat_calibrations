@@ -289,14 +289,13 @@ if __name__=='__main__':
     #to route to file on flat_qa, import easyaccess
     #ccd by ccd single epoch flats 
     #desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
-    '''
+    
     print '\tstarting DWT'
     t1 = time.time()
     c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
     t2 = time.time()
     print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
                                                                     /60.)
-    '''
     print '\tstarting DWT multilevel'
     t1 = time.time()
     c_ml = DWT.multi_level(whole_fp,Nlev=8)
