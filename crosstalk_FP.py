@@ -107,7 +107,7 @@ class Corr():
         return tmp
 
     @classmethod
-    def crosscorr(cls,FP_a,df_D,ID_pix,AB_order,AMP_pix,deg3_poly=True):
+    def crosscorr(cls,FP_a,df_D,ID_pix,AB_order,VCTM_pix,deg3_poly=True):
         '''Performs crosstalk on CCDs 1-62 (because for those we have
         coefficients)
         NOTE: if a subset of CCDs are selected, is better to use a similar
@@ -123,11 +123,7 @@ class Corr():
         Columns of crosstalk coeffs: 'victim_ccd','victim_amp','source_ccd',
         'source_amp','x','x_err','src_nl','C1','C2','C3'
         '''
-        #idx_victA = Corr.XT.loc[(Corr.XT['victim_ccd']==ID_pix)]
-        #print idx_victA; exit()
-        outdata = np.zeros(shape=AMP_pix.shape)
-        outdata[:,:] = np.nan
-
+        outdata = VCTM_pix.astype(float)
         #victim
         index = Corr.XT.loc[:,'victim_ccd'] == ID_pix
         df_sel = Corr.XT[index]
@@ -152,16 +148,37 @@ class Corr():
                 #
                 if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
                     #READ CCD pixel by pixel or use a more intelligent way
+                    #use np.where() and np.argwhere()
                     '''here the criteria must be applied to all pixels in the 
                     source image. When criteria is reached, the xtalkcorrection
                     must be applied to the equivalent pixel in the victim image
                     Take into account the AB/BA order to find the equivalent 
                     pixel
                     '''
-                    print 'check 1'
-                    t1 = time.time()
-                    #inpix is source data
-                    inpix = None
+                    value = np.zeros(shape=SRC_pix.shape,dtype=float)
+
+                    #iterator over pixels under condition
+                    #xy = np.argwhere(SRC_pix > df_sel.iloc[m]['src_nl'])
+                    #xyNo = np.argwhere(~(SRC_pix > df_sel.iloc[m]['src_nl']))
+                    indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
+                    indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
+                    
+                    #for src_nl > 0 AND inpix > src_nl
+                    if (df_sel.iloc[m]['src_nl'] > 0 and 
+                        len(SRC_pix[indx]) > 0):
+                        #apply poly to all elements in matrix obeying the 
+                        #condition
+                        for ind,elem in enumerate(['C1','C2','C3']):
+                            value[indx] += (df_sel.iloc[m][elem] * 
+                                        np.power(SRC_pix[indx],ind+1))
+                        value[indx] += (df_sel.iloc[m]['x'] * 
+                                    df_sel.iloc[m]['src_nl'])
+                    else:
+                        #apply to all elements not obeying the condition
+                        value[indxNo] += df_sel.iloc[m]['src_nl']
+                    #outdata is the victim data
+                    outdata -= value
+                    '''
                     for col in xrange(SRC_pix.shape[1]):
                         for line in xrange(SRC_pix.shape[0]):
                             print line,col
@@ -178,25 +195,13 @@ class Corr():
                                 value += df_sel.iloc[m]['x']*inpix
                             #outdata is the victim data
                             outdata[line,col] -= value
-                    t2 = time.time()
-                    print '\t\t{0:.3f}'.format((t2-t1)/60.)
                     '''
-                    value = 0.
-                    if (df_sel.iloc[m]['src_nl'] > 0 and 
-                        inpix > df_sel.iloc[m]['src_nl']):
-                        for ind,elem in enumerate(['C1','C2','C3']):
-                            value += df_sel.iloc[m][elem]*np.power(inpix,ind+1)
-                        value += df_sel.iloc[m]['x']*df_sel.iloc[m]['src_nl']
-                    else:
-                        value += df_sel.iloc[m]['x'] * inpix
-                    '''
-
                 #apply corrections on amp A of source, if order is BA
                 elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
                     #READ CCD
                     pass
 
-            elif df_sel.iloc[m]['victim_amp'] == 'B': 
+            elif df_sel.iloc[m]['victim_amp'] == 'B':
                 src_ind = [row[0] 
                          for row in FP_a].index(df_sel.iloc[m]['source_ccd'])
 
@@ -210,32 +215,37 @@ class Corr():
                                             AB_order)
                 #
                 if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
-                    print 'check 2'
                     t1 = time.time()
-                    inpix = None
-                    for col in xrange(SRC_pix.shape[1]):
-                        for line in xrange(SRC_pix.shape[0]):
-                            inpix = SRC_pix[line,col]
-                            value = 0.
-                            if (df_sel.iloc[m]['src_nl'] > 0 and 
-                                inpix > df_sel.iloc[m]['src_nl']):
-                                for ind,elem in enumerate(['C1','C2','C3']):
-                                    value += (df_sel.iloc[m][elem]* 
-                                            np.power(inpix,ind+1))
-                                value += (df_sel.iloc[m]['x']*
-                                        df_sel.iloc[m]['src_nl'])
-                            else:
-                                value += df_sel.iloc[m]['x']*inpix
-                            outdata[line,col] -= value
-                    t2 = time.time()
-                    print '\t\t{0:.3f}'.format((t2-t1)/60.)
+                    value = np.zeros(shape=SRC_pix.shape)
+
+                    #iterator over pixels under condition
+                    indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
+                    indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
+                    
+                    #for src_nl > 0 AND inpix > src_nl
+                    if (df_sel.iloc[m]['src_nl'] > 0 and 
+                        len(SRC_pix[indx]) > 0):
+                        #apply poly to all elements in matrix obeying the 
+                        #condition
+                        for ind,elem in enumerate(['C1','C2','C3']):
+                            value[indx] += (df_sel.iloc[m][elem] * 
+                                        np.power(SRC_pix[indx],ind+1))
+                        value[indx] += (df_sel.iloc[m]['x'] * 
+                                    df_sel.iloc[m]['src_nl'])
+                    else:
+                        #apply to all elements not obeying the condition
+                        value[indxNo] += df_sel.iloc[m]['src_nl']
+                    #outdata is the victim data
+                    outdata -= value
+
                 elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
                     #READ CCD
                     pass
             else:
                 raise ValueError('Amplifier not defined as A/B on xtalk file')
 
-
+        print outdata
+        print np.min(outdata),np.max(outdata),np.mean(outdata),np.median(outdata),np.std(outdata)
         print '\t(+)Empty method {0}, on class: {1}.\n\t(+)File: {2}'.format(
             sys._getframe().f_code.co_name,cls.__name__,__file__)
         #run at every step, this is more an auxiliary method
@@ -442,276 +452,6 @@ class ManageCCD():
                format((t2-t1)/60.))
         #h5file.close()
         return table,df_ind
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    ##########################################BACKUP    
-    @classmethod
-    def backup_split_amp(cls,pix_arr,df_delim,tech_ccd=False):
-        '''Receives a set of pixel arrays (with all the available data)
-        and a set of delimiters from which we get the boundaries of
-        ccd, overscan, postscan, etc
-        - DATASEC{A,B} image section
-        - BIASSEC{A,B} overscan section
-        - PRESEC{A,B} prescan section
-        - POSTSEC{A,B} postscan section
-        Here the same dictionary as OpenFile() is employed
-        Is NOT the same sectioning for all the CCDs. Is the same shape but not
-        same sectioning.
-        Pandas documentation recommend optimized data access .at, .iat, .loc,
-        .iloc and .ix
-        It's important that auxiliary list for sectioning only contain
-        sectioning info
-        NOTE: even when physically CCDs are horizontal (larger axis is columns),
-        after readout the longer axis is vertical (rows)
-        '''
-        aux_slice = ['dataseca','datasecb','biasseca','biassecb',
-                     'preseca','presecb','postseca','postsecb']
-        aux_slice.sort(key=lambda x: x.lower())
-
-        '''Create a DF to harbor delimiters and shapes for each ccd, per section
-        When created, free space from the initial DF. As CCD orientation changes
-        from header to readout, I switched del{1,2,3,4}
-        '''
-        df_ind = pd.DataFrame(columns=['ccdnum','section',
-                                       'del1','del2','del3','del4',
-                                       'dim1','dim2'])
-        for kword in aux_slice:
-            for j in xrange(len(df_delim[kword])):
-                aux_sl = Auxiliary.range_str(df_delim.loc[j,kword])
-                tmp_df = pd.DataFrame({'ccdnum':df_delim.loc[j,'ccdnum'],
-                                       'section':kword,
-                                       'del1':aux_sl[2],'del2':aux_sl[3],
-                                       'del3':aux_sl[0],'del4':aux_sl[1],
-                                       'dim1':np.abs(aux_sl[3]+1-aux_sl[2]),
-                                       'dim2':np.abs(aux_sl[1]+1-aux_sl[0])},
-                                      index=[0])
-                df_ind = df_ind.append(tmp_df)
-        #to force as integers
-        df_ind[['ccdnum','del1','del2','del3','del4',
-                'dim1','dim2']] = df_ind[['ccdnum','del1','del2','del3','del4',
-                                          'dim1','dim2']].astype(int)
-        df_ind = df_ind.reset_index()
-        df_ind = df_ind.drop('index', axis=1)
-        df_delim = None
-
-        '''Up to here there is a DF (df_ind) storing indices and dimensions for
-        the focalplane cropping. Now I need to make the ccd crop and store these
-        arrays inside an object
-        To define the pytables, all arrays inside a column must has the same
-        dimension. I need to store Science and Guide/Focus ccds separately
-        * DATASEC{A/B}, BIASSEC{A/B}, and PRESEC{A/B}: all shares the same 
-        dimension on dim1 (separately for Sci and Technical ccds), and inside 
-        each section shares the same dimension in dim2
-        - datasec:(4096,1024),(20148,1024)
-        - biassec:(4096,50),(2048,50)
-        - presec:(4096,6),(2048,6)
-        - postsec:(50,1024)
-        The following variables stores the dimensions of each section, after
-        verify these dimensions are unique. We could have put these values
-        by hand, but this way is more robust
-        '''
-        #HERE
-        #Put a condition for CCDs to be extracted, because following conditions
-        #will change
-        if (len(df_ind.loc[(df_ind['section']=='dataseca')
-                           & (df_ind['ccdnum']<=62),'dim1']
-                .drop_duplicates().values) == 1):
-            share_D1 = int(df_ind.loc[(df_ind['section']=='dataseca')
-                                      & (df_ind['ccdnum']<=62),'dim1']
-                           .drop_duplicates().values[0]) #4096
-        else:
-            print '(!)Error in shared DIM1 (Science)'; exit()
-            
-        if tech_ccd:
-            if (len(df_ind.loc[(df_ind['section']=='dataseca')
-                               & (df_ind['ccdnum']>=63),'dim1']
-                    .drop_duplicates().values) == 1):
-                share_D1_tech = int(df_ind.loc[(df_ind['section']=='dataseca')
-                                               & (df_ind['ccdnum']>=63),'dim1']
-                                    .drop_duplicates().values[0]) #2048
-            else:
-                print '(!)Error in shared DIM1 (Technical)'; exit()
-        else:
-            pass
-        
-        if ( (len(df_ind.loc[df_ind['section']=='dataseca','dim2']
-                  .drop_duplicates().values) == 1) and
-             (len(df_ind.loc[df_ind['section']=='biasseca','dim2']
-                  .drop_duplicates().values) == 1) and
-             (len(df_ind.loc[df_ind['section']=='preseca','dim2']
-                  .drop_duplicates().values) == 1) ):
-            share_data_D2 = int(df_ind.loc[df_ind['section']=='dataseca','dim2']
-                                .drop_duplicates().values[0]) #1024
-            share_bias_D2 = int(df_ind.loc[df_ind['section']=='biasseca','dim2']
-                                .drop_duplicates().values[0]) #50
-            share_pre_D2 = int(df_ind.loc[df_ind['section']=='preseca','dim2']
-                               .drop_duplicates().values[0]) #6
-        else:
-            print '(!)Error in shared DIM2'; exit()
-
-
-        '''Define pytables using the above dimensions and fill it up
-        The config: driver="H5FD_CORE",
-                    driver_core_backing_store=0
-        prevents to save a copy of the table on disk
-        '''
-        class Record(tables.IsDescription):
-            ccdnum = tables.Int32Col() #32-bit integer
-            flag_amp = tables.Int32Col()#StringCol(10) #-1/1: A/B amplifiers
-            datasec = tables.Float32Col(shape=(share_D1,share_data_D2))
-            biassec = tables.Float32Col(shape=(share_D1,share_bias_D2))
-            presec = tables.Float32Col(shape=(share_D1,share_pre_D2))
-            postsec = tables.Float32Col(shape=(share_bias_D2,share_data_D2))
-            if tech_ccd:
-                datasec_tec = tables.Float32Col(shape=(share_D1_tech,
-                                                share_data_D2))
-                biassec_tec = tables.Float32Col(shape=(share_D1_tech,
-                                                share_bias_D2)) 
-                presec_tec = tables.Float32Col(shape=(share_D1_tech,
-                                                share_pre_D2))
-                postsec_tec =tables.Float32Col(shape=(share_bias_D2,
-                                                share_data_D2))
-        h5file = tables.open_file('fp_prextalk.h5', mode = 'w',
-                                  title = 'FP sections',
-                                  driver='H5FD_CORE',
-                                  driver_core_backing_store=0)
-        group = h5file.create_group('/','pixels','CCD sections')
-        table = h5file.create_table(group,'preXtalk',Record,'Pre-crosstalk')
-        fp_row = table.row
-
-        '''Fill up Science (1-62) & Technical (63-64,69-74) CCDs sections.
-        One row for each amplifier, then 2 lines per CCD. It's verbose...
-        '''
-        non_used_ccd = []
-        t1 = time.time()
-        for M in xrange(len(pix_arr)):
-            ID_pix,AB_pix,ARR_pix = pix_arr[M]
-            #cut in pieces for A and B
-            if (ID_pix <= 62 and ID_pix >= 1):
-                #Amplifier A
-                fp_row['ccdnum'] = ID_pix
-                fp_row['flag_amp'] = -1
-                fp_row['datasec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='dataseca'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='dataseca'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='dataseca'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='dataseca'),'del4'].values[0]+1]
-                fp_row['biassec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biasseca'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biasseca'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biasseca'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biasseca'),'del4'].values[0]+1]
-                fp_row['presec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='preseca'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='preseca'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='preseca'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='preseca'),'del4'].values[0]+1]
-                fp_row['postsec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postseca'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postseca'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postseca'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postseca'),'del4'].values[0]+1]
-                #make it effective
-                fp_row.append()
-                #Amplifier B
-                fp_row['ccdnum'] = ID_pix
-                fp_row['flag_amp'] = 1
-                fp_row['datasec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='datasecb'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='datasecb'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='datasecb'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='datasecb'),'del4'].values[0]+1]
-                fp_row['biassec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biassecb'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biassecb'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biassecb'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='biassecb'),'del4'].values[0]+1]
-                fp_row['presec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='presecb'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='presecb'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='presecb'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='presecb'),'del4'].values[0]+1]
-                fp_row['postsec'] = ARR_pix[
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postsecb'),'del1'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postsecb'),'del2'].values[0]+1,
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postsecb'),'del3'].values[0]:
-                    df_ind.loc[(df_ind['ccdnum']==ID_pix) &
-                               (df_ind['section']=='postsecb'),'del4'].values[0]+1]
-                #make it effective
-                fp_row.append()
-            elif (tech_ccd and ID_pix >= 63):
-                #HERE FILL THE TECHNICAL CCDs
-                pass
-            else:
-                non_used_ccd.append(ID_pix)
-        if len(non_used_ccd) > 0:
-            non_used_ccd.sort()
-            print ('-CCDs will not be crosstalked: {0}'.
-                   format(non_used_ccd))
-        t2 = time.time()
-        print ('\n\t(*)Elapsed time in sectioning FP: {0:.3f}\'\n'.
-               format((t2-t1)/60.))
-        #h5file.close()
-        return table,df_ind
-    ##########################################BACKUP    
-    
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     @classmethod
