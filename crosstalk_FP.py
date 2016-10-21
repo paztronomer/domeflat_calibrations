@@ -61,6 +61,12 @@ class Auxiliary():
                     dframe.loc[(dframe['ccdnum']==ccdnum) &
                         (dframe['section']==datasec),'del4'].values[0]+1]
         return aux_delim
+
+    @classmethod
+    def flip_row(cls,index_arr,shape_arr):
+        row,col = index_arr
+        row = row - (shape_arr[0] - 1)
+        return (row,col)
  
 class UpdateHeader():
     '''Updates GAIN, SATURATE LEVEL, and (...) on the header
@@ -128,8 +134,6 @@ class Corr():
         Columns of crosstalk coeffs: 'victim_ccd','victim_amp','source_ccd',
         'source_amp','x','x_err','src_nl','C1','C2','C3'
         '''
-        CHNG_mod = False
-        #
         outdata = VCTM_pix.astype(float)
         #victim selection ccdnum and amp
         index2 = Corr.XT.loc[:,'victim_ccd'] == ID_pix
@@ -143,6 +147,7 @@ class Corr():
             gc.collect()
             #if CCD victim is Amp A
             if df_sel.iloc[m]['victim_amp'] == 'A':
+                CHNG_mod = False
                 #source CCD in this line of dataframe
                 src_ind = [row[0] 
                          for row in FP_a].index(df_sel.iloc[m]['source_ccd'])
@@ -176,23 +181,31 @@ class Corr():
                     indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
                     indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
 
+                    #Linear Transf of pix position 
+                    if df_sel.iloc[m]['source_amp'] == 'A':
+                        indx_val = indx
+                        indxNo_val = indxNo
+                    elif df_sel.iloc[m]['source_amp'] == 'B':
+                        indx_val = Auxiliary.flip_row(indx,SRC_pix.shape)
+                        indxNo_val = Auxiliary.flip_row(indxNo,SRC_pix.shape)
+
                     #for src_nl > 0 AND inpix > src_nl
                     if (df_sel.iloc[m]['src_nl'] > 0 and 
                         len(SRC_pix[indx]) > 0):
                         #apply polynomial to all elements in matrix obeying the 
                         #condition
-                        print 'CONDITION 1'
+                        print 'CONDITION 1 (victim A, AB)'
                         for ind,elem in enumerate(['C1','C2','C3']):
                             aux_p = SRC_pix[indx] - df_sel.iloc[m]['src_nl']
-                            value[indx] += (df_sel.iloc[m][elem] * 
-                                        np.power(aux_p,ind+1))
-                        value[indx] += (df_sel.iloc[m]['x'] * 
-                                    df_sel.iloc[m]['src_nl'])
+                            value[indx_val] += (df_sel.iloc[m][elem] * 
+                                            np.power(aux_p,ind+1))
+                        value[indx_val] += (df_sel.iloc[m]['x'] * 
+                                        df_sel.iloc[m]['src_nl'])
                         CHNG_mod = True
                     else:
                         #apply to all elements not obeying the condition
-                        value[indxNo] += df_sel.iloc[m]['src_nl'] * 
-                                        SRC_pix[indxNo]
+                        value[indxNo_val] += (df_sel.iloc[m]['src_nl'] * 
+                                            SRC_pix[indxNo])
                         CHNG_mod = True
                     #outdata is the victim data
                     outdata -= value
@@ -224,41 +237,107 @@ class Corr():
                     #xyNo = np.argwhere(~(SRC_pix > df_sel.iloc[m]['src_nl']))
                     indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
                     indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
-
-                    exit()
+                    
+                    #Linear Transf of pix position 
+                    if df_sel.iloc[m]['source_amp'] == 'A':
+                        indx_val = Auxiliary.flip_row(indx,SRC_pix.shape)
+                        indxNo_val = Auxiliary.flip_row(indxNo,SRC_pix.shape)
+                    elif df_sel.iloc[m]['source_amp'] == 'B':
+                        indx_val = indx
+                        indxNo_val = indxNo
+                    
                     #for src_nl > 0 AND inpix > src_nl
                     if (df_sel.iloc[m]['src_nl'] > 0 and 
                         len(SRC_pix[indx]) > 0):
                         #apply polynomial to all elements in matrix obeying the 
                         #condition
-                        print 'CONDITION 1'
+                        print 'CONDITION 1 (victim A, BA)'
                         for ind,elem in enumerate(['C1','C2','C3']):
                             aux_p = SRC_pix[indx] - df_sel.iloc[m]['src_nl']
-                            value[indx] += (df_sel.iloc[m][elem] * 
-                                        np.power(aux_p,ind+1))
-                        value[indx] += (df_sel.iloc[m]['x'] * 
-                                    df_sel.iloc[m]['src_nl'])
+                            value[indx_val] += (df_sel.iloc[m][elem] * 
+                                            np.power(aux_p,ind+1))
+                        value[indx_val] += (df_sel.iloc[m]['x'] * 
+                                        df_sel.iloc[m]['src_nl'])
                         CHNG_mod = True
                     else:
                         #apply to all elements not obeying the condition
-                        value[indxNo] += df_sel.iloc[m]['src_nl'] *
-                                        SRC_pix[indxNo]
+                        value[indxNo_val] += (df_sel.iloc[m]['src_nl'] *
+                                            SRC_pix[indxNo])
                         CHNG_mod = True
                     #outdata is the victim data
                     outdata -= value
                     
-                    
-                    #READ CCD
-                    #pass
-
             elif df_sel.iloc[m]['victim_amp'] == 'B':
-                pass
+                CHNG_mod = False
+                src_ind = [row[0] 
+                         for row in FP_a].index(df_sel.iloc[m]['source_ccd'])
+                if df_sel.iloc[m]['source_amp'] == 'A': data_sect = 'dataseca'
+                else: data_sect = 'datasecb'
+                XY = Auxiliary.section_del(df_D,ID_pix,data_sect)
+                SRC_pix = FP_a[src_ind][2][XY[0]:XY[1],XY[2]:XY[3]]
+                print 'victim:{0}-amp:{1}-order:{2}'.format(
+                                            df_sel.iloc[m]['victim_ccd'],
+                                            df_sel.iloc[m]['victim_amp'],
+                                            AB_order)
+                if (AB_order == 1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    print '\torder : {0}'.format(AB_order)
+                    value = np.zeros(shape=SRC_pix.shape,dtype=float)
+                    indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
+                    indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
+                    if df_sel.iloc[m]['source_amp'] == 'A':
+                        indx_val = Auxiliary.flip_row(indx,SRC_pix.shape)
+                        indxNo_val = Auxiliary.flip_row(indxNo,SRC_pix.shape)
+                    elif df_sel.iloc[m]['source_amp'] == 'B':
+                        indx_val = indx
+                        indxNo_val = indxNo
+                    if (df_sel.iloc[m]['src_nl'] > 0 and 
+                        len(SRC_pix[indx]) > 0):
+                        print 'CONDITION 1 (victim B, AB)'
+                        for ind,elem in enumerate(['C1','C2','C3']):
+                            aux_p = SRC_pix[indx] - df_sel.iloc[m]['src_nl']
+                            value[indx_val] += (df_sel.iloc[m][elem] * 
+                                            np.power(aux_p,ind+1))
+                        value[indx_val] += (df_sel.iloc[m]['x'] * 
+                                        df_sel.iloc[m]['src_nl'])
+                        CHNG_mod = True
+                    else:
+                        value[indxNo_val] += (df_sel.iloc[m]['src_nl'] * 
+                                            SRC_pix[indxNo])
+                        CHNG_mod = True
+                    outdata -= value
+                elif (AB_order == -1 and np.abs(df_sel.iloc[m]['x'] > 1E-6)):
+                    print '\t\torder : {0}'.format(AB_order)
+                    value = np.zeros(shape=SRC_pix.shape,dtype=float)
+                    indx = np.where(SRC_pix > df_sel.iloc[m]['src_nl'])
+                    indxNo = np.where(~(SRC_pix > df_sel.iloc[m]['src_nl']))
+                    if df_sel.iloc[m]['source_amp'] == 'A':
+                        indx_val = indx
+                        indxNo_val = indxNo
+                    elif df_sel.iloc[m]['source_amp'] == 'B':
+                        indx_val = Auxiliary.flip_row(indx,SRC_pix.shape)
+                        indxNo_val = Auxiliary.flip_row(indxNo,SRC_pix.shape)
+                    if (df_sel.iloc[m]['src_nl'] > 0 and 
+                        len(SRC_pix[indx]) > 0):
+                        print 'CONDITION 1 (victim B, BA)'
+                        for ind,elem in enumerate(['C1','C2','C3']):
+                            aux_p = SRC_pix[indx] - df_sel.iloc[m]['src_nl']
+                            value[indx_val] += (df_sel.iloc[m][elem] * 
+                                            np.power(aux_p,ind+1))
+                        value[indx_val] += (df_sel.iloc[m]['x'] * 
+                                        df_sel.iloc[m]['src_nl'])
+                        CHNG_mod = True
+                    else:
+                        value[indxNo_val] += (df_sel.iloc[m]['src_nl'] *
+                                            SRC_pix[indxNo])
+                        CHNG_mod = True
+                    outdata -= value
             else:
                 raise ValueError('Amplifier not defined as A/B on xtalk file')
-        
-        if CHNG_mod: print 'NO MODIF'
-        else: print '\tmin:{0:.2f} / max:{1:.2f} / mean:{2:.2f} / stdev:{3:.2f}'.format(np.min(outdata),np.max(outdata),np.mean(outdata),np.std(outdata))
-        
+
+        if CHNG_mod and np.abs(np.median(outdata)) > 1E5: print '\tmin:{0:.2f} / max:{1:.2f} / mean:{2:.2f} / stdev:{3:.2f}'.format(np.min(outdata),np.max(outdata),np.mean(outdata),np.std(outdata))
+        elif CHNG_mod: print 'CORRECTION ON RANGE < 1E5'#print '\tmin:{0:.2f} / max:{1:.2f} / mean:{2:.2f} / stdev:{3:.2f}'.format(np.min(outdata),np.max(outdata),np.mean(outdata),np.std(outdata))
+        else: print 'NO MODIF WAS APPLIED'
+
         #run at every step, this is more an auxiliary method
         return outdata
         
@@ -627,8 +706,8 @@ if __name__=='__main__':
     print ()
     t01 = time.time()
 
-    path = '/Users/fco/Code/shipyard_DES/raw_201608_hexa/'
-    fname = 'DECam_00565152.fits.fz'
+    path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
+    fname = 'DECam_00565285.fits.fz'
     crossname = 'DECam_20130606.xtalk'
 
     ManageCCD.open_file(path+fname,path+crossname)
