@@ -22,33 +22,7 @@ import scipy.signal
 import matplotlib.pyplot as plt
 import fitsio
 import pywt
-import crosstalk_FP as xtalk_fp
 import tables
-
-class TestCCD():
-    '''methods for loading single CCDs, for testing
-    '''
-    #==========================================================
-    # CANNOT USE THIS METHOD!!! ONLY FOR TEST ON SPECIFIC IMAGE
-    def opentest(self,filename):
-        '''to open fits and assign to a numpy array, it must be done
-        inside the open/close of the file, otherwise the data structure
-        remains as None.
-        '''
-        N_ext = 0 
-        header = fitsio.read_header(filename)
-        '''control point to make sure data are in fact Science Images
-        use lowercase
-        '''
-        print '\n\tTHIS METHOD IS ONLY FOR TEST. OTHERWISE IT WIll FAIL\n'
-        if fitsio.FITS(filename)[0].get_extname().lower() != 'sci':
-            print '\n\tHeader extension name is not SCI'
-            exit(0)
-        else:
-            data = fitsio.FITS(filename)[0]#[57-1:1080+1,1:4096+1]
-        return header,data
-    #pass
-
 
 class Toolbox():
     '''methods to be inserted in other 
@@ -80,7 +54,6 @@ class Toolbox():
         #alternative: scale.mad(flat_im, c=1, axis=0, center=np.median)
         Zscore = cte*(flat_im-np.median(flat_im))/MAD
         Zscore = np.abs(Zscore)
-
         ''' search for outliers and if present replace by the 
         median of neighbors
         '''
@@ -138,26 +111,43 @@ class Toolbox():
         print ('\nTotal time in all {1} modes+mother wavelets: {0:.2f}\''
                .format((t2-t1)/60.,count))
 
+    @classmethod
+    def range_str(cls,head_rng):
+        head_rng = head_rng.strip('[').strip(']').replace(':',',').split(',')
+        return map(lambda x: int(x)-1, head_rng)
+
 
 class FPSci():
     '''methods for loading science focal plane (1-62), inherited 
     from crosstalk
     Maybe import crosstalk
     '''
-    def __init__(self,path_fits,path_xtalk):
-        #call the module and then assign
-        xtalk_fp.ManageCCD.open_file(path_fits,path_xtalk)
-        self.fp_sci = xtalk_fp.ManageCCD.focal_array()
-        
-
-class FP_array():
-    '''methods for loading the entire FP, inherited from crosstalk
-    CCDs 1-62, 63-64, 65+74
-    Calls the crosstalk and loads the focal plane array into an
-    atribute
-    '''
-    pass
-
+    def __init__(self,folder,parent_root):
+        '''Simple method to construct the focal plane array 
+        '''
+        aux_fp = np.zeros((4096*8,2048*13),dtype=float)
+        max_r,max_c = 0,0
+        #list all on a directory having same root
+        for (path,dirs,files) in os.walk(folder):
+            for index,item in enumerate(files):   #file is a string
+                if (parent_root in item):
+                    M_header = fitsio.read_header(path+item)
+                    M_hdu = fitsio.FITS(path+item)[0]
+                    posA = Toolbox.range_str(M_header['detseca'])
+                    posB = Toolbox.range_str(M_header['detsecb'])
+                    datA = Toolbox.range_str(M_header['dataseca'])
+                    datB = Toolbox.range_str(M_header['datasecb'])
+                    if posA[1] > max_c: max_c = posA[1]
+                    if posA[3] > max_r: max_r = posA[3]
+                    if posB[1] > max_c: max_c = posB[1]
+                    if posB[3] > max_r: max_r = posB[3]
+                    ampA = M_hdu.read()[datA[2]:datA[3]+1,datA[0]:datA[1]+1]
+                    ampB = M_hdu.read()[datB[2]:datB[3]+1,datB[0]:datB[1]+1]
+                    aux_fp[posA[2]:posA[3]+1,posA[0]:posA[1]+1] = ampA
+                    aux_fp[posB[2]:posB[3]+1,posB[0]:posB[1]+1] = ampB
+        self.fpSci = aux_fp[:max_r+1,:max_c+1]
+        aux_fp = None
+    
 
 class DWT():
     '''methods for discrete WT of one level
@@ -190,6 +180,7 @@ class DWT():
         c_A : approximation (mean of coeffs) coefs
         c_H,c_V,c_D : horizontal detail,vertical,and diagonal coeffs
         '''
+        print type(img_arr)
         (c_A,(c_H,c_V,c_D)) = pywt.dwt2(img_arr,pywt.Wavelet(wvfunction),
                                         wvmode)
         #rec_img = pywt.idwt2((c_A,(c_H,c_V,c_D)),WVstr)#,mode='sym')
@@ -210,8 +201,6 @@ class DWT():
         '''
         c_ml = pywt.wavedec2(img_arr,pywt.Wavelet(wvfunction),
                              wvmode,level=Nlev)
-        #list of tuples containing the shapes of every matrix level
-        #cls.cmlshape = []
         aux_shape = []
         for i in range(len(c_ml)):
             if i == 0:
@@ -271,43 +260,32 @@ class Coeff(DWT):
 
 
 if __name__=='__main__':
-    print 'main here'
-    #pudu branch
-
-    path = '/Users/fco/Code/shipyard_DES/raw_201608_hexa/'
-    fname = 'DECam_00565152.fits.fz'
-    crossname = 'DECam_20130606.xtalk'
+    path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
 
     #load crosstalk module ite returns a big 2D array
-    #fp.ManageCCD.open_file(path+fname,path+crossname)
-    #whole_fp = fp.ManageCCD.focal_array()
-    whole_fp = FPSci(path+fname,path+crossname).fp_sci
-
-    #only one ccdnum=21
-    #path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
-    #fname = path+'DECam_00565285_21.fits'
-    #to route to file on flat_qa, import easyaccess
-    #ccd by ccd single epoch flats 
+    whole_fp = FPSci(path,'DECam_00565285_').fpSci
     #desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
     
     print '\tstarting DWT'
     t1 = time.time()
     c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
+    print whole_fp
     t2 = time.time()
     print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
                                                                     /60.)
-    print '\tstarting DWT multilevel'
-    t1 = time.time()
-    c_ml = DWT.multi_level(whole_fp,Nlev=8)
-    t2 = time.time()
-    print '\n\tElapsed time in DWT in 8 levels: {0:.2f}\''.format((t2-t1)
-                                                                /60.)
-    #init table
-    Coeff.set_table('dwt_ID.h5')
-    #fill table
-    Coeff.fill_table(c_ml)
-    #close table
-    Coeff.close_table()
+    if True:
+        print '\tstarting DWT multilevel'
+        t1 = time.time()
+        c_ml = DWT.multi_level(whole_fp,Nlev=8)
+        t2 = time.time()
+        print '\n\tElapsed time in DWT in 8 levels: {0:.2f}\''.format((t2-t1)
+                                                                    /60.)
+        #init table
+        Coeff.set_table('dwt_ID.h5')
+        #fill table
+        Coeff.fill_table(c_ml)
+        #close table
+        Coeff.close_table()
     
     #exit()
     #auxFn = TestCCD()
