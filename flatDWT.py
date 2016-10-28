@@ -116,6 +116,37 @@ class Toolbox():
         head_rng = head_rng.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, head_rng)
 
+    @classmethod
+    def db_numbers(cls,toQuery,toDtype,help_txt=False):
+        import despydb.desdbi as desdbi
+        desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
+        section = 'db-desoper'
+        dbi = desdbi.DesDbi(desfile,section)
+        if help_txt:
+            help(dbi)
+        cursor = dbi.cursor()
+        cursor.execute(toQuery)
+        kw = [line[0].lower() for line in cursor.description]
+        rows = cursor.fetchall()
+        outtab = np.rec.array(rows,dtype=zip(kw,toDtype))
+        return outtab
+
+    @classmethod
+    def epochFlat(cls,epoch):
+        '''request data and create stats for some epoch flat_qa table
+        '''
+        Q1flat = 'select m.nite,a.filename,a.factor,a.rms,a.worst, \
+                m.pfw_attempt_id,f.path,m.filetype from \
+                ops_epoch o,miscfile m,flat_qa a,pfw_attempt p,\
+                file_archive_info f where o.minexpnum<=m.expnum and
+                o.maxexpnum>=m.expnum and m.filename=a.filename and \
+                f.filename=m.filename and o.name={0}'.format(epoch)
+        Q1dtype = ['i4','a80','f4','f4','f4','i4','a100','a80']
+        tab1flat = Toolbox.db_numbers(Q1flat,Q1dtype)
+        #write to file
+        np.save(epoch+'_flatqa.npy',tab1flat)
+        print '\tsaving table of FLAT_QA coeffs, epoch: {0}'.format(epoch)
+
 
 class FPSci():
     '''methods for loading science focal plane (1-62), inherited 
@@ -147,7 +178,9 @@ class FPSci():
                     aux_fp[posB[2]:posB[3]+1,posB[0]:posB[1]+1] = ampB
         self.fpSci = aux_fp[:max_r+1,:max_c+1]
         aux_fp = None
-    
+   
+   @classmethod
+   
 
 class DWT():
     '''methods for discrete WT of one level
