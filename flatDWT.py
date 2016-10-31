@@ -116,37 +116,6 @@ class Toolbox():
         head_rng = head_rng.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, head_rng)
 
-    @classmethod
-    def db_numbers(cls,toQuery,toDtype,help_txt=False):
-        import despydb.desdbi as desdbi
-        desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
-        section = 'db-desoper'
-        dbi = desdbi.DesDbi(desfile,section)
-        if help_txt:
-            help(dbi)
-        cursor = dbi.cursor()
-        cursor.execute(toQuery)
-        kw = [line[0].lower() for line in cursor.description]
-        rows = cursor.fetchall()
-        outtab = np.rec.array(rows,dtype=zip(kw,toDtype))
-        return outtab
-
-    @classmethod
-    def epochFlat(cls,epoch):
-        '''request data and create stats for some epoch flat_qa table
-        '''
-        Q1flat = 'select m.nite,a.filename,a.factor,a.rms,a.worst, \
-                m.pfw_attempt_id,f.path,m.filetype from \
-                ops_epoch o,miscfile m,flat_qa a,pfw_attempt p,\
-                file_archive_info f where o.minexpnum<=m.expnum and
-                o.maxexpnum>=m.expnum and m.filename=a.filename and \
-                f.filename=m.filename and o.name={0}'.format(epoch)
-        Q1dtype = ['i4','a80','f4','f4','f4','i4','a100','a80']
-        tab1flat = Toolbox.db_numbers(Q1flat,Q1dtype)
-        #write to file
-        np.save(epoch+'_flatqa.npy',tab1flat)
-        print '\tsaving table of FLAT_QA coeffs, epoch: {0}'.format(epoch)
-
 
 class FPSci():
     '''methods for loading science focal plane (1-62), inherited 
@@ -269,13 +238,12 @@ class Coeff(DWT):
         #coeff: group name, DWT coeff: brief description
         group = cls.h5file.create_group('/','coeff','DWT coeff')
         #FP: table name, FP wavelet decomposition:ttable title
-        cls.cml_table = cls.h5file.create_table(group,'FP',Levels,'Wavedec')
-
-    @classmethod
+    
+    @classmethod 
     def fill_table(cls,coeff_tuple):
-        #fills multi-level DWT with N=8
+        #fills multilevel DWT with N=8
         cml_row = Coeff.cml_table.row
-        for m in range(3):
+        for m in xrange(3):
             cml_row['c_A'] = coeff_tuple[0]
             cml_row['c1'] = coeff_tuple[1][m]
             cml_row['c2'] = coeff_tuple[2][m]
@@ -285,24 +253,19 @@ class Coeff(DWT):
             cml_row['c6'] = coeff_tuple[6][m]
             cml_row['c7'] = coeff_tuple[7][m]
             cml_row['c8'] = coeff_tuple[8][m]
-            cml_row.append() 
-
+            cml_row.append()
+    
     @classmethod
     def close_table(cls):
         Coeff.h5file.close()
 
-
 if __name__=='__main__':
     path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
-
-    #load crosstalk module ite returns a big 2D array
-    whole_fp = FPSci(path,'DECam_00565285_').fpSci
-    #desarchive/OPS/precal/20160811-r2440/p02/xtalked-dflat
     
-    print '\tstarting DWT'
+    whole_fp = FPSci(path,'DECam_00565285')
+
     t1 = time.time()
     c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
-    print whole_fp
     t2 = time.time()
     print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
                                                                     /60.)
