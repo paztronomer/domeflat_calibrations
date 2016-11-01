@@ -140,7 +140,7 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor<{2} and rownum<50".format(N1,N2,fact_val)
+        f.factor<{2} and rownum<=50".format(N1,N2,fact_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -157,7 +157,7 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms>{3} and rownum<50".format(N1,N2,fact_val,rms_val)
+        f.factor>{2} and f.rms>{3} and rownum<=50".format(N1,N2,fact_val,rms_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -174,7 +174,7 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms<{3} and rownum<50".format(N1,N2,fact_val,rms_val)
+        f.factor>{2} and f.rms<{3} and rownum<=50".format(N1,N2,fact_val,rms_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -217,7 +217,7 @@ class FPBinned():
         M_header = fitsio.read_header(fname)
         M_hdu = fitsio.FITS(fname)[0]
         self.fpBinned = M_hdu.read()
-
+        
 
 class DWT():
     '''methods for discrete WT of one level
@@ -338,11 +338,11 @@ if __name__=='__main__':
     print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
    
     #run for every group and save as H5 table files
+    rootpth = '/archive_data/desarchive/'
     for it in xrange(3):
         if it == 0: g = Toolbox.group1([20160813,20170212],'Y4'); gg = 'g1'
         if it == 1: g = Toolbox.group2([20160813,20170212],'Y4'); gg = 'g2'
         if it == 2: g = Toolbox.group3([20160813,20170212],'Y4'); gg = 'g3'
-        rootpth = '/archive_data/desarchive/'
         for k in xrange(g1.shape[0]):
             print 'group {0}, item {0}'.format(it+1,k+1)
             dirfile = rootpath + g['path'][k] + '/'
@@ -353,7 +353,7 @@ if __name__=='__main__':
             print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
             #init table
             fnout = g['filename'][k][:g['filename'][k].find('compare')]
-            fnout += '_DWT_dmeyN8_' + gg  + '.h5'
+            fnout += 'DWT_dmeyN8_' + gg  + '.h5'
             Coeff.set_table(fnout)
             #fill table
             Coeff.fill_table(c_ml)
