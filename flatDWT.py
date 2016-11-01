@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import fitsio
 import pywt
 import tables
+import despydb.desdbi as desdbi
 
 class Toolbox():
     '''methods to be inserted in other 
@@ -116,12 +117,71 @@ class Toolbox():
         head_rng = head_rng.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, head_rng)
 
+    @classmethod
+    def dbquery(cls,toquery,outdtype,help_txt=False):
+        desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
+        section = 'db-desoper'
+        dbi = desdbi.DesDbi(desfile,section)
+        if help_txt: help(dbi)
+        cursor = dbi.cursor()
+        cursor.execute(toquery)
+        cols = [line[0].lower() for line in cursor.description]
+        rows = cursor.fetchall()
+        outtab = np.rec.array(rows,dtype=zip(cols,outdtype))
+        return outtab
+
+    @classmethod
+    def group1(cls,niterange,epoch):
+        '''this method could perfectly be at the main
+        '''
+        N1,N2 = niterange
+        fact_val = 0.7
+        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
+        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
+        file_archive_info i where m.nite>={0} and m.nite<={1} and \
+        m.filename=f.filename and i.filename=f.filename and \
+        f.factor<{2} and rownum<50".format(N1,N2,fact_val)
+        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
+        #query
+        tab = Toolbox.dbquery(query,datatype)
+        return tab
+
+    @classmethod
+    def group2(cls,niterange,epoch):
+        '''this method could perfectly be at the main
+        '''
+        N1,N2 = niterange
+        fact_val = 0.7
+        rms_val = 0.03
+        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
+        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
+        file_archive_info i where m.nite>={0} and m.nite<={1} and \
+        m.filename=f.filename and i.filename=f.filename and \
+        f.factor>{2} and f.rms>{3} and rownum<50".format(N1,N2,fact_val,rms_val)
+        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
+        #query
+        tab = Toolbox.dbquery(query,datatype)
+        return tab
+
+    @classmethod
+    def group3(cls,niterange,epoch):
+        '''this method could perfectly be at the main
+        '''
+        N1,N2 = niterange
+        fact_val = 0.7
+        rms_val = 0.03
+        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
+        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
+        file_archive_info i where m.nite>={0} and m.nite<={1} and \
+        m.filename=f.filename and i.filename=f.filename and \
+        f.factor>{2} and f.rms<{3} and rownum<50".format(N1,N2,fact_val,rms_val)
+        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
+        #query
+        tab = Toolbox.dbquery(query,datatype)
+        return tab
+
 
 class FPSci():
-    '''methods for loading science focal plane (1-62), inherited 
-    from crosstalk
-    Maybe import crosstalk
-    '''
     def __init__(self,folder,parent_root):
         '''Simple method to construct the focal plane array 
         '''
@@ -130,7 +190,7 @@ class FPSci():
         #list all on a directory having same root
         for (path,dirs,files) in os.walk(folder):
             for index,item in enumerate(files):   #file is a string
-                if (parent_root in item):
+                if (parent_root in item) and not ('fits.fz' in item) :
                     M_header = fitsio.read_header(path+item)
                     M_hdu = fitsio.FITS(path+item)[0]
                     posA = Toolbox.range_str(M_header['detseca'])
@@ -147,9 +207,17 @@ class FPSci():
                     aux_fp[posB[2]:posB[3]+1,posB[0]:posB[1]+1] = ampB
         self.fpSci = aux_fp[:max_r+1,:max_c+1]
         aux_fp = None
-   
-   @classmethod
-   
+
+
+class FPBinned():
+    def __init__(self,folder,fits):
+        '''Simple method to open focal plane binned images
+        '''
+        fname = folder+fits
+        M_header = fitsio.read_header(fname)
+        M_hdu = fitsio.FITS(fname)[0]
+        self.fpBinned = M_hdu.read()
+
 
 class DWT():
     '''methods for discrete WT of one level
@@ -182,7 +250,6 @@ class DWT():
         c_A : approximation (mean of coeffs) coefs
         c_H,c_V,c_D : horizontal detail,vertical,and diagonal coeffs
         '''
-        print type(img_arr)
         (c_A,(c_H,c_V,c_D)) = pywt.dwt2(img_arr,pywt.Wavelet(wvfunction),
                                         wvmode)
         #rec_img = pywt.idwt2((c_A,(c_H,c_V,c_D)),WVstr)#,mode='sym')
@@ -218,9 +285,6 @@ class Coeff(DWT):
     '''
     @classmethod
     def set_table(cls,str_tname):
-        print 'try 1 \t',DWT.cmlshape
-        print 'try 2 \t',DWT().cmlshape
-        
         class Levels(tables.IsDescription):
             c_A = tables.Float32Col(shape=DWT.cmlshape[0])
             c1 = tables.Float32Col(shape=DWT.cmlshape[1])
@@ -238,7 +302,8 @@ class Coeff(DWT):
         #coeff: group name, DWT coeff: brief description
         group = cls.h5file.create_group('/','coeff','DWT coeff')
         #FP: table name, FP wavelet decomposition:ttable title
-    
+        cls.cml_table = cls.h5file.create_table(group,'FP',Levels,'Wavedec')
+
     @classmethod 
     def fill_table(cls,coeff_tuple):
         #fills multilevel DWT with N=8
@@ -259,18 +324,60 @@ class Coeff(DWT):
     def close_table(cls):
         Coeff.h5file.close()
 
-if __name__=='__main__':
-    path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
-    
-    whole_fp = FPSci(path,'DECam_00565285')
 
+if __name__=='__main__':
+    '''For exposures belonging to a group. Either CCD by CCD or binned
+    '''
+    #setup samples
     t1 = time.time()
-    c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
+    #select 50 first occurences
+    g1 = Toolbox.group1([20160813,20170212],'Y4')
+    g2 = Toolbox.group2([20160813,20170212],'Y4')
+    g3 = Toolbox.group3([20160813,20170212],'Y4')
     t2 = time.time()
-    print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
-                                                                    /60.)
-    if True:
-        print '\tstarting DWT multilevel'
+    print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
+   
+    #run for every group and save as H5 table files
+    for it in xrange(3):
+        if it == 0: g = Toolbox.group1([20160813,20170212],'Y4'); gg = 'g1'
+        if it == 1: g = Toolbox.group2([20160813,20170212],'Y4'); gg = 'g2'
+        if it == 2: g = Toolbox.group3([20160813,20170212],'Y4'); gg = 'g3'
+        rootpth = '/archive_data/desarchive/'
+        for k in xrange(g1.shape[0]):
+            print 'group {0}, item {0}'.format(it+1,k+1)
+            dirfile = rootpath + g['path'][k] + '/'
+            bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
+            t1 = time.time()
+            c_ml = DWT.multi_level(bin_fp,Nlev=8)
+            t2 = time.time()
+            print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
+            #init table
+            fnout = g['filename'][k][:g['filename'][k].find('compare')]
+            fnout += '_DWT_dmeyN8_' + gg  + '.h5'
+            Coeff.set_table(fnout)
+            #fill table
+            Coeff.fill_table(c_ml)
+            #close table
+            Coeff.close_table()    
+    
+    
+    if False:
+        '''For a single exposure, CCD by CCD
+        '''
+        path = '/Users/fco/Code/shipyard_DES/raw_201608_dflat/'
+        t1 = time.time()
+        whole_fp = FPSci(path,'DECam_00565285').fpSci
+        t2 = time.time()
+        print '\telapsed time in filling FP: {0:.2f}\''.format((t2-t1)/60.)
+
+        t1 = time.time()
+        print '\tsingle-level DWT'
+        c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
+        #SAVE?????
+        t2 = time.time()
+        print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
+        
+        print '\tmulti-level DWT'
         t1 = time.time()
         c_ml = DWT.multi_level(whole_fp,Nlev=8)
         t2 = time.time()
@@ -282,10 +389,4 @@ if __name__=='__main__':
         Coeff.fill_table(c_ml)
         #close table
         Coeff.close_table()
-    
-    #exit()
-    #auxFn = TestCCD()
-    #header,img = auxFn.opentest(fname)
-    #dwt_a = DWT()
-    #dwt_a.single_level(img[:,:])
-    #dwt_a.multi_level(img[:,:])
+        
