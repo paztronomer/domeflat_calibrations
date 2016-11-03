@@ -164,6 +164,7 @@ class Utility():
     def do_job(self,reqnum,usernm):
         #auxOut = Utility().delete_junk(20160808,2625,1,'xtalked_bias',579388)
         arr1,arr2 = Utility().dbquery(reqnum,usernm)
+        auxOut = []
         for r in xrange(arr1.shape[0]):
             att,req = arr1['attnum'][r],arr1['reqnum'][r]
             unit,pfw_id = arr1['unitname'][r],arr1['id'][r]
@@ -171,7 +172,7 @@ class Utility():
             ftype = arr2['filetype'][np.where(arr2['pfw_attempt_id']==pfw_id)]
             for ft in ftype:
                 try:
-                    auxOut = Utility().delete_junk(unit,req,att,ft,pfw_id)
+                    auxOut += Utility().delete_junk(unit,req,att,ft,pfw_id)
                 except:
                     print '\n\tFailure on deleting {0}/{1}/{2}/{3}'.format(unit,
                                                                     req,att,ft)
