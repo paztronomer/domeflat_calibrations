@@ -10,7 +10,7 @@ Oct 4th: DMWY as selected wavelet (symmetric,orthogonal,biorthogonal)
 
 STEPS:
 1) Do it on a single ccd with all the possibilities --done
-2) do it well on FP with all the possibilities
+2) do it well on FP with all the possibilities --done
 3) Do it for good/bad flats and compare results
 '''
 import os
@@ -31,8 +31,7 @@ class Toolbox():
     @classmethod
     def detect_outlier(cls,imlayer):
         ''' Estimate Iglewicz and Hoaglin criteria for outlier 
-        AND REPLACE BY MEDIAN OF VICINITY! Change this because we only
-        want the values masked, not to replace them
+        and replace by NaN
         http://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
         Formula:
         Z=0.6745(x_i - median(x)) / MAD
@@ -55,8 +54,10 @@ class Toolbox():
         #alternative: scale.mad(flat_im, c=1, axis=0, center=np.median)
         Zscore = cte*(flat_im-np.median(flat_im))/MAD
         Zscore = np.abs(Zscore)
-        ''' search for outliers and if present replace by the 
-        median of neighbors
+        ''' search for outliers and if present replace by NaN
+        '''
+        imlayer[np.where(np.abs(cte*(imlayer-np.median(flat_im))/MAD)>3.5)]=np.nan
+        return imlayer
         '''
         if len(Zscore[Zscore>3.5])>0:
             for k in range(0,imlayer.shape[0]):
@@ -66,6 +67,7 @@ class Toolbox():
             return imlayer
         else:
             return imlayer
+        '''
 
     @classmethod
     def quick_stat(cls,arr_like):
@@ -81,7 +83,7 @@ class Toolbox():
         return False
 
     @classmethod
-    def view_dwt(cls,img_arr):
+    def dwt_library(cls,img_arr):
         '''Display all the availbale DWT (single level) for the input array  
         '''
         t1 = time.time()
@@ -118,9 +120,12 @@ class Toolbox():
         return map(lambda x: int(x)-1, head_rng)
 
     @classmethod
-    def dbquery(cls,toquery,outdtype,help_txt=False):
+    def dbquery(cls,toquery,outdtype,dbsection='db-desoper',help_txt=False):
+        '''the personal setup file .desservices.ini must be pointed by desfile
+        DB section by default will be desoper
+        '''
         desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
-        section = 'db-desoper'
+        section = dbsection
         dbi = desdbi.DesDbi(desfile,section)
         if help_txt: help(dbi)
         cursor = dbi.cursor()
@@ -140,7 +145,8 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor<{2} and rownum<=50".format(N1,N2,fact_val)
+        f.factor<{2} and m.filetype='compare_dflat_binned_fp' and \
+        rownum<=50".format(N1,N2,fact_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -157,7 +163,8 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms>{3} and rownum<=50".format(N1,N2,fact_val,rms_val)
+        f.factor>{2} and f.rms>{3} and m.filetype='compare_dflat_binned_fp' \
+        and rownum<=50".format(N1,N2,fact_val,rms_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -174,7 +181,8 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms<{3} and rownum<=50".format(N1,N2,fact_val,rms_val)
+        f.factor>{2} and f.rms<{3} and m.filetype='compare_dflat_binned_fp' \
+        and rownum<=50".format(N1,N2,fact_val,rms_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -183,7 +191,7 @@ class Toolbox():
 
 class FPSci():
     def __init__(self,folder,parent_root):
-        '''Simple method to construct the focal plane array 
+        '''Simple method to construct the focal plane array, DECam is 8x12  
         '''
         aux_fp = np.zeros((4096*8,2048*13),dtype=float)
         max_r,max_c = 0,0
@@ -217,7 +225,7 @@ class FPBinned():
         M_header = fitsio.read_header(fname)
         M_hdu = fitsio.FITS(fname)[0]
         self.fpBinned = M_hdu.read()
-        
+
 
 class DWT():
     '''methods for discrete WT of one level
@@ -327,40 +335,50 @@ class Coeff(DWT):
 
 if __name__=='__main__':
     '''For exposures belonging to a group. Either CCD by CCD or binned
+    Must setup a criteria to decide!
     '''
-    #setup samples
-    t1 = time.time()
-    #select 50 first occurences
-    g1 = Toolbox.group1([20160813,20170212],'Y4')
-    g2 = Toolbox.group2([20160813,20170212],'Y4')
-    g3 = Toolbox.group3([20160813,20170212],'Y4')
-    t2 = time.time()
-    print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
-   
-    #run for every group and save as H5 table files
-    rootpth = '/archive_data/desarchive/'
-    for it in xrange(3):
-        if it == 0: g = Toolbox.group1([20160813,20170212],'Y4'); gg = 'g1'
-        if it == 1: g = Toolbox.group2([20160813,20170212],'Y4'); gg = 'g2'
-        if it == 2: g = Toolbox.group3([20160813,20170212],'Y4'); gg = 'g3'
-        for k in xrange(g1.shape[0]):
-            print 'group {0}, item {0}'.format(it+1,k+1)
-            dirfile = rootpath + g['path'][k] + '/'
-            bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
-            t1 = time.time()
-            c_ml = DWT.multi_level(bin_fp,Nlev=8)
-            t2 = time.time()
-            print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
-            #init table
-            fnout = g['filename'][k][:g['filename'][k].find('compare')]
-            fnout += 'DWT_dmeyN8_' + gg  + '.h5'
-            Coeff.set_table(fnout)
-            #fill table
-            Coeff.fill_table(c_ml)
-            #close table
-            Coeff.close_table()    
+    if True:
+        #setup samples
+        t1 = time.time()
+        Y4sample = [20160808,201601009] #[20160813,20170212] entire Y4
+        #select 50 first occurences
+        g1 = Toolbox.group1(Y4sample,'Y4')
+        g2 = Toolbox.group2(Y4sample,'Y4')
+        g3 = Toolbox.group3(Y4sample,'Y4')
+        t2 = time.time()
+        print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
+       
+        #run for every group and save as H5 table files
+        rootpth = '/archive_data/desarchive/'
+        for it in xrange(3):
+            if it == 0: g = Toolbox.group1(Y4sample,'Y4'); gg = 'g1'
+            if it == 1: g = Toolbox.group2(Y4sample,'Y4'); gg = 'g2'
+            if it == 2: g = Toolbox.group3(Y4sample,'Y4'); gg = 'g3'
+            for k in xrange(g1.shape[0]):
+                print 'group {0}, item {0}'.format(it+1,k+1)
+                dirfile = rootpath + g['path'][k] + '/'
+                bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
+                t1 = time.time()
+                c_ml = DWT.multi_level(bin_fp,Nlev=8)
+                t2 = time.time()
+                print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
+                #init table
+                fnout = g['filename'][k][:g['filename'][k].find('compare')]
+                fnout += 'DWT_dmeyN8_' + gg  + '.h5'
+                Coeff.set_table(fnout)
+                #fill table
+                Coeff.fill_table(c_ml)
+                #close table
+                Coeff.close_table()    
     
-    
+    if False:
+        '''For a single binned FP
+        '''
+        fname = 'D00237866_i_r1999p06_compare-dflat-binned-fp.fits'
+        bin_fp = FPBinned('/Users/fco/Code/shipyard_DES/devel/',fname).fpBinned
+        c_ml = DWT.multi_level(bin_fp,Nlev=2)
+        print c_ml
+
     if False:
         '''For a single exposure, CCD by CCD
         '''
@@ -375,7 +393,8 @@ if __name__=='__main__':
         c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
         #SAVE?????
         t2 = time.time()
-        print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format((t2-t1)
+        print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format(
+                                                                    (t2-t1)/60.)
         
         print '\tmulti-level DWT'
         t1 = time.time()
