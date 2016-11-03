@@ -175,7 +175,6 @@ class Utility():
                 except:
                     print '\n\tFailure on deleting {0}/{1}/{2}/{3}'.format(unit,
                                                                     req,att,ft)
-            exit()
         print '\n\nCheck the below Filetypes/PFW_ID/Flags:\n{0}'.format(auxOut)
         if len(auxOut) > 0:
             datacheck = np.rec.array(auxOut,dtype=[('filetype','a50'),
