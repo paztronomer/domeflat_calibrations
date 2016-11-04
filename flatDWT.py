@@ -19,6 +19,7 @@ import time
 import numpy as np
 import scipy.stats
 import scipy.signal
+import scipy.interpolate
 import matplotlib.pyplot as plt
 import fitsio
 import pywt
@@ -40,7 +41,7 @@ class Toolbox():
         Handle Outliers", The ASQC Basic References in Quality Control: 
         Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
         '''
-        from statsmodels.robust import scale #for mad calculation
+        #from statsmodels.robust import scale #alternative mad calculation
         from scipy.stats import norm
         '''Percent point function (inverse of cdf -- percentiles) of a normal
         continous random variable
@@ -54,9 +55,9 @@ class Toolbox():
         #alternative: scale.mad(flat_im, c=1, axis=0, center=np.median)
         Zscore = cte*(flat_im-np.median(flat_im))/MAD
         Zscore = np.abs(Zscore)
-        ''' search for outliers and if present replace by NaN
+        ''' search for outliers and if present replace by -1 
         '''
-        imlayer[np.where(np.abs(cte*(imlayer-np.median(flat_im))/MAD)>3.5)]=np.nan
+        imlayer[np.where(np.abs(cte*(imlayer-np.median(flat_im))/MAD)>3.5)]=-1.
         return imlayer
         '''
         if len(Zscore[Zscore>3.5])>0:
@@ -118,6 +119,60 @@ class Toolbox():
     def range_str(cls,head_rng):
         head_rng = head_rng.strip('[').strip(']').replace(':',',').split(',')
         return map(lambda x: int(x)-1, head_rng)
+
+    @classmethod
+    def plot_flat(cls,img):
+        '''out of the FP points are masked with value -1
+        '''
+        img = np.ma.masked_where((img==-1),img)
+        percn = [np.percentile(img,k) for k in range(1,101,1)]
+        ind_aux = len(percn) - percn[::-1].index(-1)
+        minVal = percn[ind_aux]
+        #
+        fig = plt.figure(figsize=(12,6))
+        
+        ax1 = plt.subplot2grid((2,3),(0,0),colspan=1,rowspan=1)
+        ax2 = plt.subplot2grid((2,3),(0,1),colspan=2,rowspan=2)
+        ax3 = plt.subplot2grid((2,3),(1,0),colspan=1,rowspan=1)
+        #ax1 = fig.add_subplot(221,adjustable='box',aspect=1.)
+        #ax2 = fig.add_subplot(222,adjustable='box',aspect=1.)
+        #ax3 = fig.add_subplot(223)
+        #contour filled
+        from matplotlib import colors,ticker,cm
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        Y = np.linspace(0,img.shape[0]-1,img.shape[0])
+        X = np.linspace(0,img.shape[1]-1,img.shape[1])
+        X,Y = np.meshgrid(X,Y)
+        cs = ax1.contourf(X,Y,img,locator=ticker.LogLocator(),cmap=cm.PuBu_r,
+                        nchunk=0,lines='solid',origin='lower')
+        divider1 = make_axes_locatable(ax1)
+        cax1 = divider1.append_axes('left',size='10%',pad=0.9)
+        cbar1 = plt.colorbar(cs,cax=cax1)
+        #imshow
+        img_aux = img #np.ma.masked_where((img<1),img)
+        im = ax2.imshow(img_aux,cmap=cm.PuBu_r,vmin=minVal,origin='lower')
+        ax2.contour(X,Y,img,locator=ticker.LogLocator(),colors='red',
+                    nchunk=0,linestyles='solid',linewidths=1,origin='lower')
+        divider2 = make_axes_locatable(ax2)
+        cax2 = divider2.append_axes('right',size='10%',pad=0.2)
+        cbar2 = plt.colorbar(im,cax=cax2)
+        #histogram and univariate
+        imgH = np.sort(img.ravel())
+        p,x = np.histogram(imgH[np.where(imgH>minVal)],
+                        bins=100)
+        #convert bin edges to centers
+        x = x[:-1] + (x[1]+x[2])/2.
+        f = scipy.interpolate.UnivariateSpline(x,p,s=len(imgH)/20)
+        ax3.hist(imgH[np.where(imgH>minVal)],bins=100,
+                histtype='stepfilled',color='#43C6DB')
+        #
+        ax2.invert_yaxis
+        ax3.plot(x,f(x),'k-')
+        ax3.set_ylim([0,np.max(f(x))])
+        plt.tight_layout()
+        #plt.subplots_adjust(left=.025,bottom=0.05,right=0.96,top=0.97)
+        plt.show()
+        
 
     @classmethod
     def dbquery(cls,toquery,outdtype,dbsection='db-desoper',help_txt=False):
@@ -220,11 +275,15 @@ class FPSci():
 class FPBinned():
     def __init__(self,folder,fits):
         '''Simple method to open focal plane binned images
+        When a position not belongs to focal plane, the value is -1
+        Try masking those values
         '''
         fname = folder+fits
         M_header = fitsio.read_header(fname)
         M_hdu = fitsio.FITS(fname)[0]
-        self.fpBinned = M_hdu.read()
+        tmp = M_hdu.read()
+        tmp = Toolbox.detect_outlier(tmp)
+        self.fpBinned = tmp
 
 
 class DWT():
@@ -337,7 +396,10 @@ if __name__=='__main__':
     '''For exposures belonging to a group. Either CCD by CCD or binned
     Must setup a criteria to decide!
     '''
-    if True:
+    BINNED = False
+    CCD = False
+
+    if BINNED:
         #setup samples
         t1 = time.time()
         Y4sample = [20160808,201601009] #[20160813,20170212] entire Y4
@@ -350,6 +412,7 @@ if __name__=='__main__':
        
         #run for every group and save as H5 table files
         rootpth = '/archive_data/desarchive/'
+        outpath = '/work/devel/fpazch/shelf/dwt_Y4Binned/'
         for it in xrange(3):
             if it == 0: g = Toolbox.group1(Y4sample,'Y4'); gg = 'g1'
             if it == 1: g = Toolbox.group2(Y4sample,'Y4'); gg = 'g2'
@@ -359,12 +422,14 @@ if __name__=='__main__':
                 dirfile = rootpath + g['path'][k] + '/'
                 bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
                 t1 = time.time()
-                c_ml = DWT.multi_level(bin_fp,Nlev=8)
+                #for stamps the maximum is Nlev=2
+                c_ml = DWT.multi_level(bin_fp,Nlev=2)
                 t2 = time.time()
                 print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
                 #init table
-                fnout = g['filename'][k][:g['filename'][k].find('compare')]
-                fnout += 'DWT_dmeyN8_' + gg  + '.h5'
+                fnout = outpath
+                fnout += g['filename'][k][:g['filename'][k].find('compare')]
+                fnout += 'DWT_dmeyN2_' + gg  + '.h5'
                 Coeff.set_table(fnout)
                 #fill table
                 Coeff.fill_table(c_ml)
@@ -377,8 +442,9 @@ if __name__=='__main__':
         fname = 'D00237866_i_r1999p06_compare-dflat-binned-fp.fits'
         bin_fp = FPBinned('/Users/fco/Code/shipyard_DES/devel/',fname).fpBinned
         c_ml = DWT.multi_level(bin_fp,Nlev=2)
-        print c_ml
-
+        #print c_ml
+        
+        
     if False:
         '''For a single exposure, CCD by CCD
         '''
