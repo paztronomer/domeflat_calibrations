@@ -411,7 +411,7 @@ if __name__=='__main__':
         print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
        
         #run for every group and save as H5 table files
-        rootpth = '/archive_data/desarchive/'
+        rootpath = '/archive_data/desarchive/'
         outpath = '/work/devel/fpazch/shelf/dwt_Y4Binned/'
         for it in xrange(3):
             if it == 0: g = Toolbox.group1(Y4sample,'Y4'); gg = 'g1'
