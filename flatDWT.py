@@ -396,7 +396,7 @@ if __name__=='__main__':
     '''For exposures belonging to a group. Either CCD by CCD or binned
     Must setup a criteria to decide!
     '''
-    BINNED = False
+    BINNED = True
     CCD = False
 
     if BINNED:
