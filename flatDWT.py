@@ -213,7 +213,7 @@ class Toolbox():
         '''
         N1,N2 = niterange
         fact_val = 0.7
-        rms_val = 0.03
+        rms_val = 0.0075
         query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
@@ -231,7 +231,7 @@ class Toolbox():
         '''
         N1,N2 = niterange
         fact_val = 0.7
-        rms_val = 0.03
+        rms_val = 0.0075
         query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
@@ -402,7 +402,7 @@ if __name__=='__main__':
     if BINNED:
         #setup samples
         t1 = time.time()
-        Y4sample = [20160808,201601009] #[20160813,20170212] entire Y4
+        Y4sample = [20160808,20161009] #[20160813,20170212] entire Y4
         #select 50 first occurences
         g1 = Toolbox.group1(Y4sample,'Y4')
         g2 = Toolbox.group2(Y4sample,'Y4')
