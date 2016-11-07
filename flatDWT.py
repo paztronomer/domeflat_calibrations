@@ -351,17 +351,23 @@ class Coeff(DWT):
     '''method for save results of DWT on a compressed pytables
     '''
     @classmethod
-    def set_table(cls,str_tname):
-        class Levels(tables.IsDescription):
-            c_A = tables.Float32Col(shape=DWT.cmlshape[0])
-            c1 = tables.Float32Col(shape=DWT.cmlshape[1])
-            c2 = tables.Float32Col(shape=DWT.cmlshape[2])
-            c3 = tables.Float32Col(shape=DWT.cmlshape[3]) 
-            c4 = tables.Float32Col(shape=DWT.cmlshape[4])
-            c5 = tables.Float32Col(shape=DWT.cmlshape[5])
-            c6 = tables.Float32Col(shape=DWT.cmlshape[6])
-            c7 = tables.Float32Col(shape=DWT.cmlshape[7])
-            c8 = tables.Float32Col(shape=DWT.cmlshape[8])
+    def set_table(cls,str_tname,Nlev):
+        if Nlev == 2:
+            class Levels(tables.IsDescription):
+                c_A = tables.Float32Col(shape=DWT.cmlshape[0])
+                c1 = tables.Float32Col(shape=DWT.cmlshape[1])
+                c2 = tables.Float32Col(shape=DWT.cmlshape[2])
+        if Nlev == 8:
+            class Levels(tables.IsDescription):
+                c_A = tables.Float32Col(shape=DWT.cmlshape[0])
+                c1 = tables.Float32Col(shape=DWT.cmlshape[1])
+                c2 = tables.Float32Col(shape=DWT.cmlshape[2])
+                c3 = tables.Float32Col(shape=DWT.cmlshape[3]) 
+                c4 = tables.Float32Col(shape=DWT.cmlshape[4])
+                c5 = tables.Float32Col(shape=DWT.cmlshape[5])
+                c6 = tables.Float32Col(shape=DWT.cmlshape[6])
+                c7 = tables.Float32Col(shape=DWT.cmlshape[7])
+                c8 = tables.Float32Col(shape=DWT.cmlshape[8])
         cls.h5file = tables.open_file(str_tname,mode='w',
                                     title='DWT multilevel decomposition',
                                     driver='H5FD_CORE')
@@ -372,20 +378,27 @@ class Coeff(DWT):
         cls.cml_table = cls.h5file.create_table(group,'FP',Levels,'Wavedec')
 
     @classmethod 
-    def fill_table(cls,coeff_tuple):
+    def fill_table(cls,coeff_tuple,Nlev):
         #fills multilevel DWT with N=8
         cml_row = Coeff.cml_table.row
-        for m in xrange(3):
-            cml_row['c_A'] = coeff_tuple[0]
-            cml_row['c1'] = coeff_tuple[1][m]
-            cml_row['c2'] = coeff_tuple[2][m]
-            cml_row['c3'] = coeff_tuple[3][m]
-            cml_row['c4'] = coeff_tuple[4][m]
-            cml_row['c5'] = coeff_tuple[5][m]
-            cml_row['c6'] = coeff_tuple[6][m]
-            cml_row['c7'] = coeff_tuple[7][m]
-            cml_row['c8'] = coeff_tuple[8][m]
-            cml_row.append()
+        if Nlev == 2:
+            for m in xrange(3):
+                cml_row['c_A'] = coeff_tuple[0]
+                cml_row['c1'] = coeff_tuple[1][m]
+                cml_row['c2'] = coeff_tuple[2][m]
+                cml_row.append()
+        if Nlev == 8:
+            for m in xrange(3):
+                cml_row['c_A'] = coeff_tuple[0]
+                cml_row['c1'] = coeff_tuple[1][m]
+                cml_row['c2'] = coeff_tuple[2][m]
+                cml_row['c3'] = coeff_tuple[3][m]
+                cml_row['c4'] = coeff_tuple[4][m]
+                cml_row['c5'] = coeff_tuple[5][m]
+                cml_row['c6'] = coeff_tuple[6][m]
+                cml_row['c7'] = coeff_tuple[7][m]
+                cml_row['c8'] = coeff_tuple[8][m]
+                cml_row.append()
     
     @classmethod
     def close_table(cls):
@@ -414,25 +427,27 @@ if __name__=='__main__':
         rootpath = '/archive_data/desarchive/'
         outpath = '/work/devel/fpazch/shelf/dwt_Y4Binned/'
         for it in xrange(3):
-            if it == 0: g = Toolbox.group1(Y4sample,'Y4'); gg = 'g1'
-            if it == 1: g = Toolbox.group2(Y4sample,'Y4'); gg = 'g2'
-            if it == 2: g = Toolbox.group3(Y4sample,'Y4'); gg = 'g3'
-            for k in xrange(g1.shape[0]):
-                print 'group {0}, item {0}'.format(it+1,k+1)
+            if it == 0: g = g1; gg = 'g1'
+            if it == 1: g = g2; gg = 'g2'
+            if it == 2: g = g3; gg = 'g3'
+            for k in xrange(g.shape[0]):
+                print 'group {0}, item {1}, {2}'.format(it+1,k+1,
+                                                    g['filename'][k]))
                 dirfile = rootpath + g['path'][k] + '/'
                 bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
                 t1 = time.time()
                 #for stamps the maximum is Nlev=2
-                c_ml = DWT.multi_level(bin_fp,Nlev=2)
+                decLev = 2
+                c_ml = DWT.multi_level(bin_fp,Nlev=decLev)
                 t2 = time.time()
                 print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
                 #init table
                 fnout = outpath
                 fnout += g['filename'][k][:g['filename'][k].find('compare')]
-                fnout += 'DWT_dmeyN2_' + gg  + '.h5'
-                Coeff.set_table(fnout)
+                fnout += 'DWT_dmeyN' + str(decLev) + '_' + gg  + '.h5'
+                Coeff.set_table(fnout,decLev)
                 #fill table
-                Coeff.fill_table(c_ml)
+                Coeff.fill_table(c_ml,decLev)
                 #close table
                 Coeff.close_table()    
     
