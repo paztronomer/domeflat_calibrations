@@ -105,9 +105,11 @@ class Utility():
 
     def delete_junk(self,unitname,reqnum,attnum,filetype,pfw_attempt_id,
                 archive='desar2home',
-                exclusion=['compare_dflat_binned_fp','xtalked_dflat'],
+                exclusion=['compare_dflat_binned_fp'],
                 del_opt='yes'):
-        '''Different options for del_opt: yes/no/diff/print
+        '''To keep xtalked files: 
+        exclusion=['compare_dflat_binned_fp','xtalked_dflat'],
+        Different options for del_opt: yes/no/diff/print
         setup -v firstcut Y4N+2
         '''
         checkThis = []
