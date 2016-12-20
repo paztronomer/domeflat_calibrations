@@ -199,7 +199,7 @@ class Toolbox():
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        m.filetype='compare_dflat_binned_fp'".format(N1,N2,fact_val,rms_val)
+        m.filetype='compare_dflat_binned_fp'".format(N1,N2)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
