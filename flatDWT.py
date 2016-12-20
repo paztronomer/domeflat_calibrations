@@ -172,7 +172,6 @@ class Toolbox():
         plt.tight_layout()
         #plt.subplots_adjust(left=.025,bottom=0.05,right=0.96,top=0.97)
         plt.show()
-        
 
     @classmethod
     def dbquery(cls,toquery,outdtype,dbsection='db-desoper',help_txt=False):
@@ -191,53 +190,16 @@ class Toolbox():
         return outtab
 
     @classmethod
-    def group1(cls,niterange,epoch):
-        '''this method could perfectly be at the main
+    def niterange(cls,niterange,epoch):
+        '''Method to ask the DB for some relevant information to run 
+        this script over a range of nights 
         '''
         N1,N2 = niterange
-        fact_val = 0.7
         query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
         m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
         file_archive_info i where m.nite>={0} and m.nite<={1} and \
         m.filename=f.filename and i.filename=f.filename and \
-        f.factor<{2} and m.filetype='compare_dflat_binned_fp' and \
-        rownum<=50".format(N1,N2,fact_val)
-        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
-        #query
-        tab = Toolbox.dbquery(query,datatype)
-        return tab
-
-    @classmethod
-    def group2(cls,niterange,epoch):
-        '''this method could perfectly be at the main
-        '''
-        N1,N2 = niterange
-        fact_val = 0.7
-        rms_val = 0.0075
-        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
-        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
-        file_archive_info i where m.nite>={0} and m.nite<={1} and \
-        m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms>{3} and m.filetype='compare_dflat_binned_fp' \
-        and rownum<=50".format(N1,N2,fact_val,rms_val)
-        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
-        #query
-        tab = Toolbox.dbquery(query,datatype)
-        return tab
-
-    @classmethod
-    def group3(cls,niterange,epoch):
-        '''this method could perfectly be at the main
-        '''
-        N1,N2 = niterange
-        fact_val = 0.7
-        rms_val = 0.0075
-        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
-        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
-        file_archive_info i where m.nite>={0} and m.nite<={1} and \
-        m.filename=f.filename and i.filename=f.filename and \
-        f.factor>{2} and f.rms<{3} and m.filetype='compare_dflat_binned_fp' \
-        and rownum<=50".format(N1,N2,fact_val,rms_val)
+        m.filetype='compare_dflat_binned_fp'".format(N1,N2,fact_val,rms_val)
         datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         #query
         tab = Toolbox.dbquery(query,datatype)
@@ -276,13 +238,14 @@ class FPBinned():
     def __init__(self,folder,fits):
         '''Simple method to open focal plane binned images
         When a position not belongs to focal plane, the value is -1
-        Try masking those values
+        Before return it, add 1 to set outer region to zero value
         '''
         fname = folder+fits
         M_header = fitsio.read_header(fname)
         M_hdu = fitsio.FITS(fname)[0]
         tmp = M_hdu.read()
         tmp = Toolbox.detect_outlier(tmp)
+        tmp += 1.
         self.fpBinned = tmp
 
 
@@ -295,7 +258,7 @@ class DWT():
         return False
     
     @classmethod
-    def single_level(cls,img_arr,wvfunction='dmey',wvmode='symmetric'):
+    def single_level(cls,img_arr,wvfunction='dmey',wvmode='zero'):
         '''DISCRETE wavelet transform
         Wavelet families available: 'haar', 'db', 'sym', 'coif', 'bior', 
         'rbio','dmey'
@@ -328,7 +291,7 @@ class DWT():
         return c_A,c_H,c_V,c_D
         
     @classmethod
-    def multi_level(cls,img_arr,wvfunction='dmey',wvmode='symmetric',Nlev=8):
+    def multi_level(cls,img_arr,wvfunction='dmey',wvmode='zero',Nlev=8):
         '''Wavelet Decomposition in multiple levels, opossed to DWT which is
         the wavelet transform of one level only
         - Nlev: number of level for WAVEDEC2 decomposition
@@ -406,60 +369,50 @@ class Coeff(DWT):
 
 
 if __name__=='__main__':
-    '''For exposures belonging to a group. Either CCD by CCD or binned
-    Must setup a criteria to decide!
+    '''
+    NAME       MINNITE  MAXNITE   MINEXPNUM  MAXEXPNUM
+    ---------------------------------------------------
+    SVE1       20120911 20121228     133757      164457
+    SVE2       20130104 20130228     165290      182695
+    Y1E1       20130815 20131128     226353      258564
+    Y1E2       20131129 20140209     258621      284018
+    Y2E1       20140807 20141129     345031      382973
+    Y2E2       20141205 20150518     383751      438346
+    Y3         20150731 20160212     459984      516846
+    Y4         20160813 20170212     563912      573912
     '''
     BINNED = True
     CCD = False
 
     if BINNED:
         #setup samples
-        t1 = time.time()
-        Y4sample = [20160808,20161009] #[20160813,20170212] entire Y4
-        #select 50 first occurences
-        g1 = Toolbox.group1(Y4sample,'Y4')
-        g2 = Toolbox.group2(Y4sample,'Y4')
-        g3 = Toolbox.group3(Y4sample,'Y4')
-        t2 = time.time()
-        print '\telapsed time in grouping {0}'.format((t2-t1)/60.)
-       
+        y4n = [20160808,20170212] #[20160813,20170212] entire Y4
+        label = 'y4'
+        print '\n=====\t=====\n\tStarting with {0}\n'.format(label.upper())
         #run for every group and save as H5 table files
+        dflat_tab = Toolbox.niterange(y4n,label)
         rootpath = '/archive_data/desarchive/'
-        outpath = '/work/devel/fpazch/shelf/dwt_Y4Binned/'
-        for it in xrange(3):
-            if it == 0: g = g1; gg = 'g1'
-            if it == 1: g = g2; gg = 'g2'
-            if it == 2: g = g3; gg = 'g3'
-            for k in xrange(g.shape[0]):
-                print 'group {0}, item {1}, {2}'.format(it+1,k+1,
-                                                    g['filename'][k]))
-                dirfile = rootpath + g['path'][k] + '/'
-                bin_fp = FPBinned(dirfile,g['filename'][k]).fpBinned
-                t1 = time.time()
-                #for stamps the maximum is Nlev=2
-                decLev = 2
-                c_ml = DWT.multi_level(bin_fp,Nlev=decLev)
-                t2 = time.time()
-                print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
-                #init table
-                fnout = outpath
-                fnout += g['filename'][k][:g['filename'][k].find('compare')]
-                fnout += 'DWT_dmeyN' + str(decLev) + '_' + gg  + '.h5'
-                Coeff.set_table(fnout,decLev)
-                #fill table
-                Coeff.fill_table(c_ml,decLev)
-                #close table
-                Coeff.close_table()    
+        outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
+        for k in xrange(dflat_tab.shape[0]):
+            dirfile = rootpath + dflat_tab['path'][k] + '/'
+            bin_fp = FPBinned(dirfile,dflat_tab['filename'][k]).fpBinned
+            t1 = time.time()
+            #for stamps the maximum is Nlev=2
+            decLev = 2
+            c_ml = DWT.multi_level(bin_fp,Nlev=decLev)
+            t2 = time.time()
+            print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
+            #init table
+            fnout = outpath
+            fnout += dflat_tab['filename'][k][:
+                            dflat_tab['filename'][k].find('compare')]
+            fnout += label + '.h5'
+            Coeff.set_table(fnout,decLev)
+            #fill table
+            Coeff.fill_table(c_ml,decLev)
+            #close table
+            Coeff.close_table()    
     
-    if False:
-        '''For a single binned FP
-        '''
-        fname = 'D00237866_i_r1999p06_compare-dflat-binned-fp.fits'
-        bin_fp = FPBinned('/Users/fco/Code/shipyard_DES/devel/',fname).fpBinned
-        c_ml = DWT.multi_level(bin_fp,Nlev=2)
-        #print c_ml
-        
-        
     if False:
         '''For a single exposure, CCD by CCD
         '''
@@ -468,7 +421,6 @@ if __name__=='__main__':
         whole_fp = FPSci(path,'DECam_00565285').fpSci
         t2 = time.time()
         print '\telapsed time in filling FP: {0:.2f}\''.format((t2-t1)/60.)
-
         t1 = time.time()
         print '\tsingle-level DWT'
         c_A,c_H,c_V,c_D = DWT.single_level(whole_fp)
@@ -476,7 +428,6 @@ if __name__=='__main__':
         t2 = time.time()
         print '\n\tElapsed time in DWT the focal plane: {0:.2f}\''.format(
                                                                     (t2-t1)/60.)
-        
         print '\tmulti-level DWT'
         t1 = time.time()
         c_ml = DWT.multi_level(whole_fp,Nlev=8)
@@ -489,4 +440,3 @@ if __name__=='__main__':
         Coeff.fill_table(c_ml)
         #close table
         Coeff.close_table()
-        
