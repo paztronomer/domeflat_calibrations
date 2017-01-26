@@ -157,7 +157,7 @@ class Toolbox():
         mout = np.zeros_like(m1,dtype=bool)
         mout[np.where(np.logical_or(m1,m2))] = True
         return mout,m2
-    
+
     @classmethod
     def prev_value_dispers(cls,values):
         '''Previous Version
@@ -311,7 +311,7 @@ class Toolbox():
         y8 = scipy.stats.entropy(ang_count.ravel())
         '''PENDING: ADD PCA'''
         return (y1,y2,y3,y4,y5,y6,y7,y8) 
-        
+
         
 class Screen():
     @classmethod
@@ -329,6 +329,7 @@ class Screen():
         2) second output is a tuple containing the shapes of the arrays, for 
         each DWT level 
         '''
+        print 'improve this method with improvements from filter_plot'
         gc.collect()
         if Nlev != 2:
             raise ValueError('This method is designed for 2 levels of decomp')
@@ -405,19 +406,26 @@ class TimeSerie():
     
 class Graph():
     @classmethod
-    def filter_plot(cls,dataAVG,data1,data2,coeff,fname,minimalSize=1):
+    def filter_plot(cls,mask_cA,mask_cH,mask_cV,data1,data2,coeff,fname,
+                minimalSize=3):
         '''Method for plotting on the same frame the DWT for level 1 and 2,
         belonging to Horizontal, Vertical and Diagonal coefficients.
-        Only values inside the inner region od DECam are considered: the mask
-        is constructed from c_A selecting values above 1.
+        Only values inside the inner region od DECam are considered: the masks
+        are constructed from c_A selecting values above 1, and modifying it 
+        to better suit horizontal and vertical coeffs.
         Then the borders are displayed and the inner region is applied through
-        mas_join method. Values inside the mask are selected if they are above 
+        mask_join method. Values inside the mask are selected if they are above 
         the RMS of the values of the pixels inside the mask.
         With the above selected points we perform clustering based in DBSCAN,
-        using a minimal cluster size of 1. This value is an input.
+        using a minimal cluster size of 3. This value is an input.
         Inputs are:
         - data1,data2: arrays of DWT for level=1,2 
-        - dataAVG: array of c_A, level=1
+        - mask_cA: mask constructed outside this script. Based on c_A, 
+        and correcting some pixels in the border by hand. Boolean array.
+        - mask_cH: mask made by hand, based on mask_cA but adding 2 rows of
+        pixels on each horizontal edge.
+        - mask_cV: mask made by hand, based on mask_cA but adding 2 columns of
+        pixels on each vertical edge.
         - coeff: string H,V,D 
         - fname: filename of the DWT file
         - minimalSize: minimal size of the cluster to be taken into account. 
@@ -432,85 +440,278 @@ class Graph():
         coo_gss = np.argwhere(gauss>Toolbox.rms(gauss))
         gss_N,gss_label,gss_mask = Toolbox.cluster_dbscan(coo_gss)
         '''
-        #zero-padding is only available for Y4
+        #erode the boolean array and produce same dtype
+        #will be used? for diagonal coeffs?
+        cA_eros = scipy.ndimage.binary_erosion(mask_cA,
+                                            iterations=1).astype(bool)
+        if coeff.upper() == 'H': inn_mask = mask_cH
+        elif coeff.upper() == 'V': inn_mask = mask_cV
+        elif coeff.upper() == 'D': inn_mask = mask_cA
+        else: raise ValueError('Coeff string must be H,V or D')
+       
+        rms1 = Toolbox.rms(data1,maskFP=True,baseMask=mask_cA)
+        rms2 = Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
+        aux_m1 = scalMask.Mask.scaling(mask_cA,data1)
+        std1 = np.std(data1[np.where(aux_m1)])
+        avg1 = np.mean(data1[np.where(aux_m1)])
+        aux_m2 = scalMask.Mask.scaling(mask_cA,data2)
+        std2 = np.std(data2[np.where(aux_m2)])
+        avg2 = np.mean(data2[np.where(aux_m2)])
+        print 'RMS ',rms1,rms2,'STD ',std1,std2,'AVG ',avg1,avg2
+        print 'uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n'
 
-        #create a template mask based on c_A, where pixel values > 1.
-        cA_model = np.ma.getmask(np.ma.masked_greater(dataAVG,1.,copy=True))
-
-        #then use the template to scale it to current size and mask values 
-        #below RMS (when calculating RMS inside the unmasked area). Make it for
-        #levels 1 and 2.
-        mAvg1,pAvg1 = Toolbox.mask_join(
-                    data1,
-                    Toolbox.rms(data1,maskFP=True,baseMask=cA_model),
-                    baseMask=cA_model)
-        mAvg2,pAvg2 = Toolbox.mask_join(
-                    data2,
-                    Toolbox.rms(data2,maskFP=True,baseMask=cA_model),
-                    baseMask=cA_model)
-        #for clustering, must use coordinates of the mask
+        #calculate the RMS inside c_A and select peaks inside a more
+        #inner mask
+        thres1 = 1.*Toolbox.rms(data1,maskFP=True,baseMask=mask_cA)
+        thres2 = 1.*Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
+        mAvg1,pAvg1 = Toolbox.mask_join(data1,thres1,baseMask=inn_mask)
+        mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=inn_mask)
+        
+        #for clustering, must use coordinates of the peaks inside the mask
         coo1 = np.argwhere(pAvg1)
         coo2 = np.argwhere(pAvg2)
         #extrema values inside inner region
-        minN1,maxN1 = np.min(data1[coo1]),np.max(data1[coo1])
-        minN2,maxN2 = np.min(data2[coo2]),np.max(data2[coo2])
-        
-        #Note: for clustering, will use minimal cluster size=1
-        gc.collect()
-        d1_N,d1_label,d1_mask = Toolbox.cluster_dbscan(coo1,minsize=minimalSize)
-        gc.collect()
-        d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,minsize=minimalSize)
+        '''deal with no peaks scenario'''
+        #conditions for non-peaks above RMS
+        if (data1[coo1].ravel().shape[0] > 0): 
+            minN1,maxN1 = np.min(data1[coo1]),np.max(data1[coo1])
+        else:
+            minN1,maxN1 = -1,0
+        if (data2[coo2].ravel().shape[0] > 0):
+            minN2,maxN2 = np.min(data2[coo2]),np.max(data2[coo2])
+        else:
+            minN2,maxN2 = -1,0
+        #we will distinguish between cores, points belonging to clusters but 
+        #not to cores, and noise. That is the reason we're using a cluster 
+        #size > 1. So, cluster size=3
+        '''deal with no peaks scenario'''
+        if (data1[coo1].ravel().shape[0] > 0): 
+            gc.collect()
+            d1_N,d1_label,d1_mask = Toolbox.cluster_dbscan(coo1,
+                                                        minsize=minimalSize)
+        if (data2[coo2].ravel().shape[0] > 0):
+            gc.collect()
+            d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,
+                                                        minsize=minimalSize)
         
         #for plotting usage
-        veil1 = np.ma.masked_where(~mAvg1,data1)
-        veil2 = np.ma.masked_where(~mAvg2,data2)
-        
+        #veil1 = np.ma.masked_where(~mAvg1,data1)
+        #veil2 = np.ma.masked_where(~mAvg2,data2)
+        #then setup plots for both levels at the same time
         plt.close('all')
         fig = plt.figure(figsize=(18,9))
         fig.suptitle('DWT level 1-2, coefficients {0}\n{1}'.format(coeff,fname),
                     fontsize=16)
         ax1 = fig.add_subplot(121)
         ax2 = fig.add_subplot(122)
-
-        #inner and outer region
-        im1 = ax1.imshow(veil1,origin='lower',interpolation='none',
-                        cmap='gray',alpha=0.08)
-        im2 = ax2.imshow(veil2,origin='lower',interpolation='none',
-                        cmap='gray',alpha=0.08)
-        
+        #masking inner and outer region
+        im1 = ax1.imshow(aux_m1,origin='lower',interpolation='none',
+                        cmap='gray',alpha=.1)
+        im2 = ax2.imshow(aux_m2,origin='lower',interpolation='none',
+                        cmap='gray',alpha=.1)
         #Clusters and outliers. Colorcode is DWT transform value. Level=1
-        idx1 = np.where(np.logical_and(d1_label!=-1,d1_mask))
-        idx2 = np.where(np.logical_and(d1_label!=-1,~d1_mask))
-        p1 = ax1.scatter(coo1[idx1][:,1],coo1[idx1][:,0],s=30,
-                        c=data1[coo1[idx1][:,0],coo1[idx1][:,1]],
-                        vmin=minN1,vmax=maxN1,cmap='jet',
-                        marker='o',alpha=0.8,lw=0.8,edgecolor='none')
-        ax1.scatter(coo1[idx2][:,1],coo1[idx2][:,0],s=60,
-                c=data1[coo1[idx2][:,0],coo1[idx2][:,1]],
-                vmin=minN1,vmax=maxN1,cmap='jet',
-                marker='D',alpha=0.8,lw=0.8,edgecolor='none')
+        if (data1[coo1].ravel().shape[0] > 0): 
+            idx1 = np.where(np.logical_and(d1_label!=-1,d1_mask))
+            idx2 = np.where(np.logical_and(d1_label!=-1,~d1_mask))
+            p1 = ax1.scatter(coo1[idx1][:,1],coo1[idx1][:,0],s=30,
+                            c=data1[coo1[idx1][:,0],coo1[idx1][:,1]],
+                            vmin=minN1,vmax=maxN1,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.8,edgecolor='none')
+            ax1.scatter(coo1[idx2][:,1],coo1[idx2][:,0],s=60,
+                    c=data1[coo1[idx2][:,0],coo1[idx2][:,1]],
+                    vmin=minN1,vmax=maxN1,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.8,edgecolor='none')
+            #to setup the colorboxes and limits
+            #left,bottom,width,height 0 to 1
+            cb1 = fig.add_axes([0.01,0.2,0.03,0.6]) 
+            fig.colorbar(p1,cax=cb1)
         #Level=2. Note we reuse idx1,2
-        idx1 = np.where(np.logical_and(d2_label!=-1,d2_mask))
-        idx2 = np.where(np.logical_and(d2_label!=-1,~d2_mask))
-        p2 = ax2.scatter(coo2[idx1][:,1],coo2[idx1][:,0],s=30,
-                        c=data2[coo2[idx1][:,0],coo2[idx1][:,1]],
-                        vmin=minN2,vmax=maxN2,cmap='jet',
-                        marker='o',alpha=0.8,lw=0.2,edgecolor='none')
-        ax2.scatter(coo2[idx2][:,1],coo2[idx2][:,0],s=60,
-                c=data2[coo2[idx2][:,0],coo2[idx2][:,1]],
-                vmin=minN2,vmax=maxN2,cmap='jet',
-                marker='D',alpha=0.8,lw=0.2,edgecolor='none')
-
-        #left,bottom,width,height 0 to 1
-        cb1 = fig.add_axes([0.01,0.2,0.03,0.6]) 
-        cb2 = fig.add_axes([0.91,0.2,0.03,0.6])
-        fig.colorbar(p1,cax=cb1)
-        fig.colorbar(p2,cax=cb2)
+        if (data2[coo2].ravel().shape[0] > 0):
+            idx1 = np.where(np.logical_and(d2_label!=-1,d2_mask))
+            idx2 = np.where(np.logical_and(d2_label!=-1,~d2_mask))
+            p2 = ax2.scatter(coo2[idx1][:,1],coo2[idx1][:,0],s=30,
+                            c=data2[coo2[idx1][:,0],coo2[idx1][:,1]],
+                            vmin=minN2,vmax=maxN2,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.2,edgecolor='none')
+            ax2.scatter(coo2[idx2][:,1],coo2[idx2][:,0],s=60,
+                    c=data2[coo2[idx2][:,0],coo2[idx2][:,1]],
+                    vmin=minN2,vmax=maxN2,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.2,edgecolor='none')
+            #to setup the colorboxes and limits
+            #left,bottom,width,height 0 to 1
+            cb2 = fig.add_axes([0.91,0.2,0.03,0.6])
+            fig.colorbar(p2,cax=cb2)
         ax1.set_xlim([0,data1.shape[1]-1])
         ax1.set_ylim([0,data1.shape[0]-1])
         ax2.set_xlim([0,data2.shape[1]-1])
         ax2.set_ylim([0,data2.shape[0]-1])
         plt.show()
+        
+        if False:
+            '''Below is the working code on which RMS and selection were made
+            inside a inner mask'''
+            #erode the boolean array and produce same dtype
+            #will be used? for diagonal coeffs?
+            cA_eros = scipy.ndimage.binary_erosion(mask_cA,
+                                                iterations=1).astype(bool)
+            if coeff.upper() == 'H': inn_mask = mask_cH
+            elif coeff.upper() == 'V': inn_mask = mask_cV
+            elif coeff.upper() == 'D': inn_mask = mask_cA
+            else: raise ValueError('Coeff string must be H,V or D')
+            
+            rms1 = Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
+            rms2 = Toolbox.rms(data2,maskFP=True,baseMask=inn_mask)
+            aux_m1 = scalMask.Mask.scaling(inn_mask,data1)
+            std1 = np.std(data1[np.where(aux_m1)])
+            avg1 = np.mean(data1[np.where(aux_m1)])
+            aux_m2 = scalMask.Mask.scaling(inn_mask,data2)
+            std2 = np.std(data2[np.where(aux_m2)])
+            avg2 = np.mean(data2[np.where(aux_m2)])
+            print 'RMS ',rms1,rms2,'STD ',std1,std2,'AVG ',avg1,avg2
+            print 'uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n'
+
+            thres1 = Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
+            thres2 = Toolbox.rms(data2,maskFP=True,baseMask=inn_mask)
+            mAvg1,pAvg1 = Toolbox.mask_join(data1,thres1,baseMask=inn_mask)
+            mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=inn_mask)
+            
+            #for clustering, must use coordinates of the peaks inside the mask
+            coo1 = np.argwhere(pAvg1)
+            coo2 = np.argwhere(pAvg2)
+            #extrema values inside inner region
+            minN1,maxN1 = np.min(data1[coo1]),np.max(data1[coo1])
+            minN2,maxN2 = np.min(data2[coo2]),np.max(data2[coo2])
+            #we will distinguish between cores, points belonging to clusters but 
+            #not to cores, and noise. That is the reason we're using a cluster 
+            #size > 1. So, cluster size=3
+            gc.collect()
+            d1_N,d1_label,d1_mask = Toolbox.cluster_dbscan(coo1,minsize=minimalSize)
+            gc.collect()
+            d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,minsize=minimalSize)
+            
+            #for plotting usage
+            #veil1 = np.ma.masked_where(~mAvg1,data1)
+            #veil2 = np.ma.masked_where(~mAvg2,data2)
+            #then setup plots for both levels at the same time
+            plt.close('all')
+            fig = plt.figure(figsize=(18,9))
+            fig.suptitle('DWT level 1-2, coefficients {0}\n{1}'.format(coeff,fname),
+                        fontsize=16)
+            ax1 = fig.add_subplot(121)
+            ax2 = fig.add_subplot(122)
+            #masking inner and outer region
+            im1 = ax1.imshow(aux_m1,origin='lower',interpolation='none',
+                            cmap='gray',alpha=.1)
+            im2 = ax2.imshow(aux_m2,origin='lower',interpolation='none',
+                            cmap='gray',alpha=.1)
+            #Clusters and outliers. Colorcode is DWT transform value. Level=1
+            idx1 = np.where(np.logical_and(d1_label!=-1,d1_mask))
+            idx2 = np.where(np.logical_and(d1_label!=-1,~d1_mask))
+            p1 = ax1.scatter(coo1[idx1][:,1],coo1[idx1][:,0],s=30,
+                            c=data1[coo1[idx1][:,0],coo1[idx1][:,1]],
+                            vmin=minN1,vmax=maxN1,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.8,edgecolor='none')
+            ax1.scatter(coo1[idx2][:,1],coo1[idx2][:,0],s=60,
+                    c=data1[coo1[idx2][:,0],coo1[idx2][:,1]],
+                    vmin=minN1,vmax=maxN1,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.8,edgecolor='none')
+            #Level=2. Note we reuse idx1,2
+            idx1 = np.where(np.logical_and(d2_label!=-1,d2_mask))
+            idx2 = np.where(np.logical_and(d2_label!=-1,~d2_mask))
+            p2 = ax2.scatter(coo2[idx1][:,1],coo2[idx1][:,0],s=30,
+                            c=data2[coo2[idx1][:,0],coo2[idx1][:,1]],
+                            vmin=minN2,vmax=maxN2,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.2,edgecolor='none')
+            ax2.scatter(coo2[idx2][:,1],coo2[idx2][:,0],s=60,
+                    c=data2[coo2[idx2][:,0],coo2[idx2][:,1]],
+                    vmin=minN2,vmax=maxN2,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.2,edgecolor='none')
+            #to setup the colorboxes and limits
+            #left,bottom,width,height 0 to 1
+            cb1 = fig.add_axes([0.01,0.2,0.03,0.6]) 
+            cb2 = fig.add_axes([0.91,0.2,0.03,0.6])
+            fig.colorbar(p1,cax=cb1)
+            fig.colorbar(p2,cax=cb2)
+            ax1.set_xlim([0,data1.shape[1]-1])
+            ax1.set_ylim([0,data1.shape[0]-1])
+            ax2.set_xlim([0,data2.shape[1]-1])
+            ax2.set_ylim([0,data2.shape[0]-1])
+            plt.show()
+
+        if False:
+            '''Below is the working method without erosion'''
+            #create a template mask based on c_A, where pixel values > 1.
+            cAtmp = np.ma.getmask(np.ma.masked_greater(dataAVG,1.,copy=True))
+            #then use the template to scale it to current size and mask values 
+            #below RMS (when calculating RMS inside the unmasked area). Make it for
+            #levels 1 and 2.
+            mAvg1,pAvg1 = Toolbox.mask_join(
+                        data1,
+                        Toolbox.rms(data1,maskFP=True,baseMask=cA_model),
+                        baseMask=cA_model)
+            mAvg2,pAvg2 = Toolbox.mask_join(
+                        data2,
+                        Toolbox.rms(data2,maskFP=True,baseMask=cA_model),
+                        baseMask=cA_model)
+            #for clustering, must use coordinates of the mask
+            coo1 = np.argwhere(pAvg1)
+            coo2 = np.argwhere(pAvg2)
+            #extrema values inside inner region
+            minN1,maxN1 = np.min(data1[coo1]),np.max(data1[coo1])
+            minN2,maxN2 = np.min(data2[coo2]),np.max(data2[coo2])
+            #Note: for clustering, will use minimal cluster size=3
+            gc.collect()
+            d1_N,d1_label,d1_mask = Toolbox.cluster_dbscan(coo1,minsize=minimalSize)
+            gc.collect()
+            d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,minsize=minimalSize)
+            #for plotting usage
+            veil1 = np.ma.masked_where(~mAvg1,data1)
+            veil2 = np.ma.masked_where(~mAvg2,data2)
+            #then setup plots for both levels at the same time
+            plt.close('all')
+            fig = plt.figure(figsize=(18,9))
+            fig.suptitle('DWT level 1-2, coefficients {0}\n{1}'.format(coeff,fname),
+                        fontsize=16)
+            ax1 = fig.add_subplot(121)
+            ax2 = fig.add_subplot(122)
+            #masking inner and outer region
+            im1 = ax1.imshow(veil1,origin='lower',interpolation='none',
+                            cmap='gray',alpha=0.08)
+            im2 = ax2.imshow(veil2,origin='lower',interpolation='none',
+                            cmap='gray',alpha=0.08)
+            #Clusters and outliers. Colorcode is DWT transform value. Level=1
+            idx1 = np.where(np.logical_and(d1_label!=-1,d1_mask))
+            idx2 = np.where(np.logical_and(d1_label!=-1,~d1_mask))
+            p1 = ax1.scatter(coo1[idx1][:,1],coo1[idx1][:,0],s=30,
+                            c=data1[coo1[idx1][:,0],coo1[idx1][:,1]],
+                            vmin=minN1,vmax=maxN1,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.8,edgecolor='none')
+            ax1.scatter(coo1[idx2][:,1],coo1[idx2][:,0],s=60,
+                    c=data1[coo1[idx2][:,0],coo1[idx2][:,1]],
+                    vmin=minN1,vmax=maxN1,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.8,edgecolor='none')
+            #Level=2. Note we reuse idx1,2
+            idx1 = np.where(np.logical_and(d2_label!=-1,d2_mask))
+            idx2 = np.where(np.logical_and(d2_label!=-1,~d2_mask))
+            p2 = ax2.scatter(coo2[idx1][:,1],coo2[idx1][:,0],s=30,
+                            c=data2[coo2[idx1][:,0],coo2[idx1][:,1]],
+                            vmin=minN2,vmax=maxN2,cmap='jet',
+                            marker='o',alpha=0.8,lw=0.2,edgecolor='none')
+            ax2.scatter(coo2[idx2][:,1],coo2[idx2][:,0],s=60,
+                    c=data2[coo2[idx2][:,0],coo2[idx2][:,1]],
+                    vmin=minN2,vmax=maxN2,cmap='jet',
+                    marker='D',alpha=0.8,lw=0.2,edgecolor='none')
+            #to setup the colorboxes and limits
+            #left,bottom,width,height 0 to 1
+            cb1 = fig.add_axes([0.01,0.2,0.03,0.6]) 
+            cb2 = fig.add_axes([0.91,0.2,0.03,0.6])
+            fig.colorbar(p1,cax=cb1)
+            fig.colorbar(p2,cax=cb2)
+            ax1.set_xlim([0,data1.shape[1]-1])
+            ax1.set_ylim([0,data1.shape[0]-1])
+            ax2.set_xlim([0,data2.shape[1]-1])
+            ax2.set_ylim([0,data2.shape[0]-1])
+            plt.show()
         return True
 
     @classmethod
@@ -653,6 +854,10 @@ class Call():
         '''Call the method for clustering.DBSCAN different coefficients,
         through the plotting method
         '''
+        #boolean mask made in scalMask_dflat
+        npyMask_A = np.load('/work/devel/fpazch/shelf/cA_mask.npy')
+        npyMask_H = np.load('/work/devel/fpazch/shelf/cH_mask.npy')
+        npyMask_V = np.load('/work/devel/fpazch/shelf/cV_mask.npy')
         if Nlev == 2:
             cA = [row['c_A'] for row in h5table.iterrows()]
             c1 = [row['c1'] for row in h5table.iterrows()]
@@ -664,19 +869,22 @@ class Call():
                 #for level 1, c1[]
                 #pos1H = Graph.filter_plot(c1[0]*c1[0],(1,'H'))
                 #pos2H = Graph.filter_plot(c2[0]*c2[0],(2,'H'))
-                Graph.filter_plot(cA[0],c1[0]*c1[0],c2[0]*c2[0],'H',fname)
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                                c1[0]*c1[0],c2[0]*c2[0],'H',fname)
             if True:
                 print '\t=== performing over c_V ==='
                 #for level 1, c1[]
                 #pos1V = Graph.filter_plot(c1[1]*c1[1],(1,'V'))
                 #pos2V = Graph.filter_plot(c2[1]*c2[1],(2,'V'))
-                Graph.filter_plot(cA[1],c1[1]*c1[1],c2[1]*c2[1],'V',fname)
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                                c1[1]*c1[1],c2[1]*c2[1],'V',fname)
             if True:
                 print '\t=== performing over c_D ==='
                 #for level 1, c1[]
                 #pos1D = Graph.filter_plot(c1[2]*c1[2],(1,'D'))
                 #pos2D = Graph.filter_plot(c2[2]*c2[2],(2,'D'))
-                Graph.filter_plot(cA[2],c1[2]*c1[2],c2[2]*c2[2],'D',fname)
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                                c1[2]*c1[2],c2[2]*c2[2],'D',fname)
         else:
             print '\n\t=== Levels not being N=%d aren\'t still setup ==='%(Nlev)
     
@@ -767,6 +975,7 @@ class Call():
         statPos = Toolbox.posit_dispers(sel,frame)
         #column names where fq. stands for oper.flat_qa origin, v. stands for
         #values, and p. stands for positions
+        '''ADD LEVEL COLUMN'''
         col = ['nite','reqnum','pfw','expnum','band','fq.factor']
         col += ['fq.rms','fq.worst']   
         col += ['v.avg','v.med','v.std','v.rms','v.min','v.max','v.mad','v.S']
@@ -778,26 +987,27 @@ class Call():
 
 
 if __name__=='__main__':
-    print 'starting'
     #to setup a mask of the outer region of DECam, based on a well behaved flat
     if False:
         Toolbox.binned_mask_npy()
     
     #this is the path to the zero-padded DWT tables
+    #note that for band is case sensitive
     pathBinned = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
-    band = 'u'
-    
+    band = 'g'
+    print '\n\tStatistics on all available tables for band: {0}'.format(band)
+     
     '''TO VISUALIZE BY EXPNUM RANGE
     '''
-    if False:
-        expnum_range = range(601308,601394+1)#(606738,606824+1)
+    if True:
+        expnum_range = range(606456,606541+1)#(606738,606824+1)
         opencount = 0
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
                 expnum = int(item[1:item.find('_')])
                 #if not ('_r2625' in item):
                 #    print item
-                if ('_'+band+'_' in item) and (expnum in expnum_range):
+                if (('_'+band+'_' in item) and (expnum in expnum_range)):
                     opencount += 1
                     print '{0} ___ {1} Iter: {2}'.format(item,index+1,opencount)
                     try:
@@ -819,9 +1029,8 @@ if __name__=='__main__':
     '''
     #remember to change for each year
     savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
-    savename = 'reStat_' + band + '_.csv' 
-    if True:
-        filler = 0
+    savename = 'reStat_' + band + '_.csv'
+    if False:
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
                 if ('_'+band+'_' in item):
