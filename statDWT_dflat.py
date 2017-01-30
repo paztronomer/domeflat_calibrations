@@ -48,17 +48,28 @@ class Toolbox():
         return A
 
     @classmethod
-    def rms(cls,arr,maskFP=False,baseMask=np.load('fp_BinnedMask.npy')):
+    def rms(cls,arr,maskFP=False,baseMask=None):
         '''returns RMS for ndarray, is maskFP=True then use a scalable mask
         for inner coeffs. maskFP is set to False as default 
+        np.load('fp_BinnedMask.npy')
         '''
         if maskFP:
             m1 = scalMask.Mask.scaling(baseMask,arr)
             arr = arr[np.where(m1)]
-            outrms = np.sqrt(np.mean(np.square(arr.ravel())))
-        else:
-            outrms = np.sqrt(np.mean(np.square(arr.ravel())))
+        outrms = np.sqrt(np.mean(np.square(arr.ravel())))
         return outrms
+
+    @classmethod
+    def uncert(cls,arr,maskFP=False,baseMask=None):
+        '''calculates the uncertain in a parameter, as usually used in
+        physics
+        '''
+        if maskFP:
+            M = scalMask.Mask.scaling(baseMask,arr)
+            arr = arr[np.where(M)]
+        ux = np.sqrt(np.mean(np.square(arr.ravel())) + 
+                    np.square(np.mean(arr.ravel()))) 
+        return ux
 
     @classmethod
     def corr_random(cls,data):
@@ -236,49 +247,131 @@ class Toolbox():
             rad_aux1,rad_aux2,rad_aux3,rad_aux4,rad_aux5) 
     
     @classmethod
-    def value_dispers(cls,selected_pts):
+    def value_dispers(cls,sel_pts):
         '''Method to estimate dispersion in the values of the clustered points.
         Not related to the position, but to the power.
         For the entropy, we'll use the values as unnormalized probabilities
-        Intput: tuple with one tuple per level containing (values,coord,cluster-
-        label,label)
-        Returns: tuple with values
-        '''
-        #using only the second level. When improve the mask, add the 1st level
-        level = selected_pts[1]
-        #for level in selected_pts:
-        #we will use only the Diagonal coeffs. When improve the mask other
-        #coeffs will be added
-        cD = level[2]
-        val = cD[0] 
-        nm = cD[2] 
-        lab = cD[3]
-        #mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,ratio(other/core)
-        x1 = np.mean(val) 
-        x2 = np.median(val)
-        x3 = np.std(val)
-        x4 = Toolbox.rms(val) 
-        x5 = np.min(val)
-        x6 = np.max(val)
-        x7 = np.median(np.abs(val-np.median(val)))
-        x8 = scipy.stats.entropy(val.ravel())
-        x9 = np.unique(nm[np.where(nm!=-1)]).shape[0]
-        x10 = val.shape[0]
-        x11 = (lab.shape[0]-lab[np.where(lab==1)].shape[0])/np.float(
-            lab[np.where(lab==1)].shape[0])
-        #x12 AndersonDarling! 
-        return (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11)
-    
-    @classmethod 
-    def posit_dispers(cls,selected_pts,coeff_shape):
-        '''Method to evaluate the spatial behavior of the detected peaks.
-        Intput: tuple with one tuple per level containing (values,coord,cluster-
-        label,label). Also a tuple containing the shapes for each of the levels
+        Intput: tuple with one tuple per level containing 3 elements each level)
+        Inside each of the 3 elements (H,V,and D) are:
+        1) first element
+        - values of RMS and uncertainty for all the coeffs inside DECam,
+        - coordinates of selected peaks
+        - values of the selected peaks
+        - cluster label
+        - class of each point (1/0/-1 : core/out/noise)
+        Level1-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
+        Level2-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
+        2) Also a tuple containing the shapes for each of the levels
         of the DWT
         Returns: tuple with values
         '''
-        #for now only the Diagonal level=2 coeffs will be used. When the masking 
-        #be improved, then we will broad to the others.
+        print 'VALUES'
+        #number of entries in the output tuple is important for non peak case
+        nitem = 14
+        lablevel = ['H','V','D']
+        for idx1,level in enumerate(sel_pts):
+            for idx2,coeff in enumerate(level):
+                #condition for non peaks
+                if np.all(np.isnan(coeff[2])):
+                    out = tuple([np.nan]*nitem)
+                #condition for only one point
+                elif coeff[3].shape < 2:
+                    out = tuple([coeff[3][0]].append([np.nan]*(nitem-1)))
+                else:
+                    #level,mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,
+                    #ratio(other/core)
+                    x0 = idx1 + 1
+                    x1 = lablevel[idx2]
+                    x2 = np.mean(coeff[3]) 
+                    x3 = np.median(coeff[3])
+                    x4 = np.std(coeff[3])
+                    x5 = Toolbox.rms(coeff[3]) 
+                    x6 = Toolbox.uncert(coeff[3])
+                    x7 = np.min(coeff[3])
+                    x8 = np.max(coeff[3])
+                    x9 = np.median(np.abs(coeff[3] - np.median(coeff[3])))
+                    x10 = scipy.stats.entropy(coeff[3].ravel())
+                    x11 = np.unique(coeff[4][np.where(coeff[4]!=-1)]).shape[0]
+                    x12 = coeff[3].shape[0]
+                    x13 = (coeff[5].shape[0] - 
+                        coeff[5][np.where(coeff[5]==1)].shape[0]) / np.float(
+                        coeff[5][np.where(coeff[5]==1)].shape[0])
+                    out = (x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13)
+                    '''toy histogram
+                    n,bins,patches = plt.hist(coeff[3],coeff[3].shape[0]/10, 
+                        normed=False,facecolor='green',alpha=0.75)
+                    plt.show()
+                    '''
+        return out
+    
+    @classmethod 
+    def posit_dispers(cls,sel_pts,coeff_shape):
+        '''Method to evaluate the spatial behavior of the detected peaks.
+        Intput: tuple with one tuple per level containing 3 elements each level.
+        Inside each of the 3 elements (H,V,and D) are:
+        1) first element
+        - values of RMS and uncertainty for all the coeffs inside DECam,
+        - coordinates of selected peaks
+        - values of the selected peaks
+        - cluster label
+        - class of each point (1/0/-1 : core/out/noise)
+        Level1-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
+        Level2-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
+        2) Also a tuple containing the shapes for each of the levels
+        of the DWT.
+        Returns: tuple with values
+        '''
+        print 'POSITION'
+        nitem = 14
+        lablevel = ['H','V','D']
+        for idx1,level in enumerate(sel_pts):
+            dim = coeff_shape[idx1]
+            for idx2,coeff in enumerate(level):
+                #condition for non peaks
+                if np.all(np.isnan(coeff[2])):
+                    out = tuple([np.nan]*nitem)
+                #condition for only one point
+                elif coeff[3].shape < 2:
+                    out = tuple([coeff[3][0]].append([np.nan]*(nitem-1)))
+                else:
+                    #define the origin as the center of the array, then 
+                    #calculate the angle for each of the selected peaks, using 
+                    #the origin as reference
+                    !!!!!!!!!!
+                    origin = ((dim2[1]-1)/np.float(2),(dim2[0]-1)/np.float(2))
+                    theta = np.arctan2(coo[:,0]-origin[0],coo[:,1]-origin[1])
+                    #then define the borders of the angular pieces. To get the real results
+                    #negative angles must be employed on the range PI...2PI
+                    ang_step = (np.concatenate([np.linspace(0,np.pi,19),
+                            np.linspace(0.,-np.pi,19)[::-1]]))
+                    #print ang_step*180/np.pi
+                    ang_count = []
+                    for it in xrange(1,len(ang_step)):
+                        loc = np.where(np.logical_and(theta>ang_step[it-1],
+                                    theta<=ang_step[it]))
+                        ang_count.append(theta[loc].shape[0])
+                    ang_count = np.array(ang_count)
+                    #mean,median,stdev,rms,min,max,MAD,S
+                    y1 = np.mean(ang_count) 
+                    y2 = np.median(ang_count)
+                    y3 = np.std(ang_count)
+                    y4 = Toolbox.rms(ang_count) 
+                    y5 = np.min(ang_count)
+                    y6 = np.max(ang_count)
+                    y7 = np.median(np.abs(ang_count-np.median(ang_count)))
+                    y8 = scipy.stats.entropy(ang_count.ravel())
+                    '''PENDING: ADD PCA / UNCERT'''
+        
+        
+        
         level = selected_pts[1]
         cD = level[2]
         coo = cD[1]
@@ -309,7 +402,7 @@ class Toolbox():
         y6 = np.max(ang_count)
         y7 = np.median(np.abs(ang_count-np.median(ang_count)))
         y8 = scipy.stats.entropy(ang_count.ravel())
-        '''PENDING: ADD PCA'''
+        '''PENDING: ADD PCA / UNCERT'''
         return (y1,y2,y3,y4,y5,y6,y7,y8) 
 
         
@@ -321,15 +414,25 @@ class Screen():
         It its designed for 2 levels of decomposition.
         minCluster: minimal size of a gruop of points to match conditions to be
         a cluster
+        Note: for level-1 we will use horizontal and vertical masks for c_H and 
+        c_V. For level-2 and for diagonal, we will use c_A based mask.
+        Here we must also consider the scenario of no peak detection, as well
+        as the statistics of all the coefficients inside the selected mask.
         Outputs: 
         1) first output is a tuple of tuples containing arrays, one subset 
         for each level, length of the tuple is the number of DWT levels. Each
         level has: cH,cV,cD. And each coefficient has: (value,coordinates,
         cluster-label,label). The output has 3 levels of depth.
+        Level1-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
+        Level2-----c_H------RMS/uncert/coord/values/label/class
+                |--c_V------RMS/uncert/coord/values/label/class
+                |--c_D------RMS/uncert/coord/values/label/class
         2) second output is a tuple containing the shapes of the arrays, for 
-        each DWT level 
+        each DWT level. This will allow us to analyze the spatial distribution
+        of peaks
         '''
-        print 'improve this method with improvements from filter_plot'
         gc.collect()
         if Nlev != 2:
             raise ValueError('This method is designed for 2 levels of decomp')
@@ -338,51 +441,81 @@ class Screen():
         cA = [row['c_A'] for row in h5table.iterrows()]
         cHVD1 = [row['c1'] for row in h5table.iterrows()]
         cHVD2 = [row['c2'] for row in h5table.iterrows()]
-        #we will use only the diagonal coefficients in our subsequent analysis
-        #because the horizontal and vertical need to the re-masked
-        #Create a template mask based on c_A. In this array, values of 
-        #points outside the DECam region has values=1.
-        cA_model = np.ma.getmask(np.ma.masked_greater(cA[0],1.,copy=True))
-        #then scale the c_A template to the current shape of the target array,
-        #and mask values below RMS (when calculating RMS inside the inner region 
-        #area). Iterate over levels/coeffs.
+        #set of masks, made inside scalMask_dflat script
+        mask_A = np.load('/work/devel/fpazch/shelf/cA_mask.npy')
+        mask_H = np.load('/work/devel/fpazch/shelf/cH_mask.npy')
+        mask_V = np.load('/work/devel/fpazch/shelf/cV_mask.npy')
+        mask_D = np.load('/work/devel/fpazch/shelf/cD_mask.npy')
+        #then scale the template mask to the current shape of the target array,
+        #and mask values below RMS. Iterate over levels/coeffs.
         innRegion = []
         shapeRegion = []
-        for level in [cHVD1,cHVD2]:
+        for ind1,level in enumerate([cHVD1,cHVD2]):
             shapeRegion.append(level[0].shape)
+            #this list (later a tuple) will harbor 3 coeffs results per level
             auxlevel = []
-            for coeff in level:
-                maskA,ptsA = Toolbox.mask_join(
+            for ind2,coeff in enumerate(level):
+                #discriminate for c_H and c_V masks, level:1
+                if (ind1 == 0 and ind2 == 0):
+                    model = mask_H
+                elif (ind1 == 0 and ind2 == 1):
+                    model = mask_V
+                else:
+                    model = mask_A
+                #rms and uncertainty of all coefficients
+                var1 = Toolbox.rms(coeff,maskFP=True,baseMask=model)
+                var2 = Toolbox.uncert(coeff,maskFP=True,baseMask=model)
+                #get the scaled mask and the peaks within the condition
+                maskN,ptsN = Toolbox.mask_join(
                             coeff,
-                            Toolbox.rms(coeff,maskFP=True,baseMask=cA_model),
-                            baseMask=cA_model)
+                            1.*Toolbox.rms(coeff,maskFP=True,baseMask=model),
+                            baseMask=model)
                 #for clustering, must use coordinates of the mask
-                coo = np.argwhere(ptsA)
-                #extrema values inside inner region
-                minN,maxN = np.min(coeff[coo]),np.max(coeff[coo])         
-                #Note: for clustering, will use minimal cluster size=1
-                clust_N,clust_label,clust_mask = Toolbox.cluster_dbscan(
-                                                coo,minsize=minCluster)
-                #to locate the points belonging to clusters (cores) from those
-                #considered as part of the cluster but not of the core.
-                #Noise (non-core points, low-density regions) are also taken 
-                #into account
-                #Note that noise is not taken into account (clust_label=-1)
-                indCore = np.where(np.logical_and(clust_label!=-1,clust_mask))
-                indOut = np.where(np.logical_and(clust_label!=-1,~clust_mask))
-                indNoise = np.where(clust_label==-1)
-                #for use them on input data:
-                # coeff[coo[indCore][:,0],coo[indCore][:,1]]
-                # coeff[coo[indOut][:,0],coo[indOut][:,1]]
-                # to plot coordinates: coo[indCore][:,1],coo[indCore][:,0]
-                #save a list of 3 components: coordinates, cluster-labels, and
-                #label
-                tmp = np.empty_like(clust_mask,dtype='i4')
-                tmp[indCore],tmp[indOut],tmp[indNoise] = 1,0,-1 
-                auxlevel.append((coeff[coo[:,0],coo[:,1]],coo,clust_label,tmp))
-                #save coord of all points with its label (core=1,outlier=0,
-                #noise=-1) because its need to know the amount of cores 
-                #(grouping) as a measure of density
+                coo = np.argwhere(ptsN)
+                #as absence of peaks is a possibility, we must account for it
+                #remember that minimal shape of coordinates is [0,2]
+                if (coo.shape[0] > 0):
+                    #extrema values of the masked peaks
+                    minN,maxN = np.min(coeff[coo]),np.max(coeff[coo])         
+                    clust_N,clust_label,clust_mask = Toolbox.cluster_dbscan(
+                                                    coo,minsize=minCluster)
+                    #output from DBSCAN are: 
+                    # - number of clusters,
+                    # - labels of each input coordinate, 
+                    # - mask to separate 3 sets (core/outer/noise) and locate 
+                    # the points belonging to clusters (cores) from those
+                    # considered as part of the cluster but not of the core.
+                    # Noise (non-core points, low-density regions) are also 
+                    # taken into account
+                    iCore = np.where(np.logical_and(clust_label!=-1,clust_mask))
+                    iOut = np.where(np.logical_and(clust_label!=-1,~clust_mask))
+                    iNoise = np.where(clust_label==-1)
+                    #for use the above indices on input data:
+                    # coeff[coo[iCore][:,0],coo[iCore][:,1]]
+                    # coeff[coo[iOut][:,0],coo[iOut][:,1]]
+                    #to plot coordinates: coo[iCore][:,1],coo[iCore][:,0]
+                    #save a list of 3 components: coordinates, cluster-labels, 
+                    #and label
+                    #
+                    #create a list resuming the class of each input point
+                    tmp = np.empty_like(clust_mask,dtype='i4')
+                    tmp[iCore],tmp[iOut],tmp[iNoise] = 1,0,-1
+                    #save a list of tuples where each entry has:
+                    # - RMS and uncertainty of all the coeffs in DECam
+                    # - coordinate of the input point
+                    # - DWT value of the input point
+                    # - clustering label for each input point (-1,0,1,2,...)
+                    # - clustering class for each input point (1,0,-1)
+                    #save coord of all points with its label (core=1,outlier=0,
+                    #noise=-1) because its need to know the amount of cores 
+                    #(grouping) as a measure of density
+                    auxlevel.append((var1,var2,
+                                coo,coeff[coo[:,0],coo[:,1]],
+                                clust_label,tmp))
+                else:
+                    #if no peak is selected, then save a tuple of NaN
+                    auxlevel.append((var1,var2,np.nan,np.nan,np.nan,np.nan))
+            #this list (later tuple) will has 2 items (2 levels of DWT)
             innRegion.append(tuple(auxlevel))
         return tuple(innRegion),tuple(shapeRegion)
 
@@ -449,6 +582,8 @@ class Graph():
         elif coeff.upper() == 'D': inn_mask = mask_cA
         else: raise ValueError('Coeff string must be H,V or D')
        
+        #just for testing values
+        #inner mask is only for level:1 because of the lenght scale it traces
         rms1 = Toolbox.rms(data1,maskFP=True,baseMask=mask_cA)
         rms2 = Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
         aux_m1 = scalMask.Mask.scaling(mask_cA,data1)
@@ -458,14 +593,15 @@ class Graph():
         std2 = np.std(data2[np.where(aux_m2)])
         avg2 = np.mean(data2[np.where(aux_m2)])
         print 'RMS ',rms1,rms2,'STD ',std1,std2,'AVG ',avg1,avg2
-        print 'uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n'
+        print ('uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),
+            np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n')
 
-        #calculate the RMS inside c_A and select peaks inside a more
-        #inner mask
-        thres1 = 1.*Toolbox.rms(data1,maskFP=True,baseMask=mask_cA)
+        #for level:1 use Horizontal and Vertical masks 
+        #for level:2 use the Average mask for all the coeffcients
+        thres1 = 1.*Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
         thres2 = 1.*Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
         mAvg1,pAvg1 = Toolbox.mask_join(data1,thres1,baseMask=inn_mask)
-        mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=inn_mask)
+        mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=mask_cA)
         
         #for clustering, must use coordinates of the peaks inside the mask
         coo1 = np.argwhere(pAvg1)
@@ -858,6 +994,7 @@ class Call():
         npyMask_A = np.load('/work/devel/fpazch/shelf/cA_mask.npy')
         npyMask_H = np.load('/work/devel/fpazch/shelf/cH_mask.npy')
         npyMask_V = np.load('/work/devel/fpazch/shelf/cV_mask.npy')
+        npyMask_D = np.load('/work/devel/fpazch/shelf/cD_mask.npy')
         if Nlev == 2:
             cA = [row['c_A'] for row in h5table.iterrows()]
             c1 = [row['c1'] for row in h5table.iterrows()]
@@ -975,6 +1112,7 @@ class Call():
         statPos = Toolbox.posit_dispers(sel,frame)
         #column names where fq. stands for oper.flat_qa origin, v. stands for
         #values, and p. stands for positions
+        print 'Metadata in the header of the DWT!! Add level to the table'
         '''ADD LEVEL COLUMN'''
         col = ['nite','reqnum','pfw','expnum','band','fq.factor']
         col += ['fq.rms','fq.worst']   
@@ -999,8 +1137,8 @@ if __name__=='__main__':
      
     '''TO VISUALIZE BY EXPNUM RANGE
     '''
-    if True:
-        expnum_range = range(606456,606541+1)#(606738,606824+1)
+    if False:
+        expnum_range = range(606456,606541+1)#(460179,516693)#(606738,606824+1)
         opencount = 0
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
@@ -1030,7 +1168,7 @@ if __name__=='__main__':
     #remember to change for each year
     savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
     savename = 'reStat_' + band + '_.csv'
-    if False:
+    if True:
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
                 if ('_'+band+'_' in item):
@@ -1051,6 +1189,7 @@ if __name__=='__main__':
                         H5tab.closetab()
                         table.close()
         #write oout the table of results
+        exit()
         df_res.to_csv(savename,index=False,header=True)
     
     '''PREVIOUS TRY
