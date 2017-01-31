@@ -267,25 +267,25 @@ class Toolbox():
                 |--c_D------RMS/uncert/coord/values/label/class
         2) Also a tuple containing the shapes for each of the levels
         of the DWT
-        Returns: tuple with values
+        Returns: tuple with values for each level-coeff combination
         '''
         print 'VALUES'
         #number of entries in the output tuple is important for non peak case
+        out = []
         nitem = 14
-        lablevel = ['H','V','D']
+        labcoeff = ['H','V','D']
         for idx1,level in enumerate(sel_pts):
             for idx2,coeff in enumerate(level):
-                #condition for non peaks
+                x0 = idx1 + 1
+                x1 = labcoeff[idx2]
                 if np.all(np.isnan(coeff[2])):
-                    out = tuple([np.nan]*nitem)
-                #condition for only one point
-                elif coeff[3].shape < 2:
-                    out = tuple([coeff[3][0]].append([np.nan]*(nitem-1)))
+                    out.append(tuple([x0,x1].append([np.nan]*(nitem-2))))
+                elif coeff[3].shape[0] < 2:
+                    out.append( tuple([x0,x1,coeff[3][0]].append(
+                            [np.nan]*(nitem-3))) )
                 else:
                     #level,mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,
                     #ratio(other/core)
-                    x0 = idx1 + 1
-                    x1 = lablevel[idx2]
                     x2 = np.mean(coeff[3]) 
                     x3 = np.median(coeff[3])
                     x4 = np.std(coeff[3])
@@ -300,7 +300,7 @@ class Toolbox():
                     x13 = (coeff[5].shape[0] - 
                         coeff[5][np.where(coeff[5]==1)].shape[0]) / np.float(
                         coeff[5][np.where(coeff[5]==1)].shape[0])
-                    out = (x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13)
+                    out.append((x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13))
                     '''toy histogram
                     n,bins,patches = plt.hist(coeff[3],coeff[3].shape[0]/10, 
                         normed=False,facecolor='green',alpha=0.75)
@@ -327,83 +327,54 @@ class Toolbox():
                 |--c_D------RMS/uncert/coord/values/label/class
         2) Also a tuple containing the shapes for each of the levels
         of the DWT.
-        Returns: tuple with values
+        Returns: tuple with values for each level-coeff combination
         '''
         print 'POSITION'
-        nitem = 14
-        lablevel = ['H','V','D']
+        out = []
+        nitem = 11
+        labcoeff = ['H','V','D']
+        #define the borders of the angular pieces. To get 
+        #real results, negative angles must be employed on the range 
+        #PI...2PI. Steps of 10 degrees
+        ang_step = (np.concatenate([np.linspace(0,np.pi,19),
+                np.linspace(0.,-np.pi,19)[::-1]]))
         for idx1,level in enumerate(sel_pts):
             dim = coeff_shape[idx1]
             for idx2,coeff in enumerate(level):
-                #condition for non peaks
+                y0 = idx1+1
+                y1 = labcoeff[idx2]
                 if np.all(np.isnan(coeff[2])):
-                    out = tuple([np.nan]*nitem)
-                #condition for only one point
-                elif coeff[3].shape < 2:
-                    out = tuple([coeff[3][0]].append([np.nan]*(nitem-1)))
+                    out.append( tuple([x0,x1].append([np.nan]*(nitem-2))) )
+                elif (coeff[3].shape[0] < 2):
+                    out.append( tuple([x0,x1,coeff[3][0]].append([np.nan]*(nitem-3))) )
                 else:
                     #define the origin as the center of the array, then 
                     #calculate the angle for each of the selected peaks, using 
                     #the origin as reference
-                    !!!!!!!!!!
-                    origin = ((dim2[1]-1)/np.float(2),(dim2[0]-1)/np.float(2))
+                    coo = coeff[2]
+                    origin = ((dim[1]-1)/np.float(2),(dim[0]-1)/np.float(2))
                     theta = np.arctan2(coo[:,0]-origin[0],coo[:,1]-origin[1])
-                    #then define the borders of the angular pieces. To get the real results
-                    #negative angles must be employed on the range PI...2PI
-                    ang_step = (np.concatenate([np.linspace(0,np.pi,19),
-                            np.linspace(0.,-np.pi,19)[::-1]]))
-                    #print ang_step*180/np.pi
                     ang_count = []
                     for it in xrange(1,len(ang_step)):
                         loc = np.where(np.logical_and(theta>ang_step[it-1],
                                     theta<=ang_step[it]))
                         ang_count.append(theta[loc].shape[0])
                     ang_count = np.array(ang_count)
+                    #we have the counts for each angular interval of 10 degrees,
+                    #and on this we will perform statistics
                     #mean,median,stdev,rms,min,max,MAD,S
-                    y1 = np.mean(ang_count) 
-                    y2 = np.median(ang_count)
-                    y3 = np.std(ang_count)
-                    y4 = Toolbox.rms(ang_count) 
-                    y5 = np.min(ang_count)
-                    y6 = np.max(ang_count)
-                    y7 = np.median(np.abs(ang_count-np.median(ang_count)))
-                    y8 = scipy.stats.entropy(ang_count.ravel())
-                    '''PENDING: ADD PCA / UNCERT'''
-        
-        
-        
-        level = selected_pts[1]
-        cD = level[2]
-        coo = cD[1]
-        nm = cD[2]
-        lab = cD[3]
-        dim2 = coeff_shape[1]
-        #define the origin as the center of the array, then calculate the 
-        #angle for each of the selected peaks, using the origin as reference
-        origin = ((dim2[1]-1)/np.float(2),(dim2[0]-1)/np.float(2))
-        theta = np.arctan2(coo[:,0]-origin[0],coo[:,1]-origin[1])
-        #then define the borders of the angular pieces. To get the real results
-        #negative angles must be employed on the range PI...2PI
-        ang_step = (np.concatenate([np.linspace(0,np.pi,19),
-                                        np.linspace(0.,-np.pi,19)[::-1]]))
-        #print ang_step*180/np.pi
-        ang_count = []
-        for it in xrange(1,len(ang_step)):
-            loc = np.where(np.logical_and(theta>ang_step[it-1],
-                        theta<=ang_step[it]))
-            ang_count.append(theta[loc].shape[0])
-        ang_count = np.array(ang_count)
-        #mean,median,stdev,rms,min,max,MAD,S
-        y1 = np.mean(ang_count) 
-        y2 = np.median(ang_count)
-        y3 = np.std(ang_count)
-        y4 = Toolbox.rms(ang_count) 
-        y5 = np.min(ang_count)
-        y6 = np.max(ang_count)
-        y7 = np.median(np.abs(ang_count-np.median(ang_count)))
-        y8 = scipy.stats.entropy(ang_count.ravel())
-        '''PENDING: ADD PCA / UNCERT'''
-        return (y1,y2,y3,y4,y5,y6,y7,y8) 
+                    y2 = np.mean(ang_count) 
+                    y3 = np.median(ang_count)
+                    y4 = np.std(ang_count)
+                    y5 = Toolbox.rms(ang_count) 
+                    y6 = Toolbox.uncert(ang_count)
+                    y7 = np.min(ang_count)
+                    y8 = np.max(ang_count)
+                    y9 = np.median(np.abs(ang_count-np.median(ang_count)))
+                    y10 = scipy.stats.entropy(ang_count.ravel())
+                    out.append((y0,y1,y2,y3,y4,y5,y6,y7,y8,y9,y10))
+                    '''PENDING: ADD PCA ORIENTATION OF PPAL 3 VECTORS'''
+        return out
 
         
 class Screen():
