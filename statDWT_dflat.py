@@ -267,12 +267,13 @@ class Toolbox():
                 |--c_D------RMS/uncert/coord/values/label/class
         2) Also a tuple containing the shapes for each of the levels
         of the DWT
-        Returns: tuple with values for each level-coeff combination
+        Returns: tuple with values for each level-coeff combination plus the 
+        RMS and uncertainty for all the coeffs inside the mask
         '''
         print 'VALUES'
         #number of entries in the output tuple is important for non peak case
         out = []
-        nitem = 14
+        nitem = 16
         labcoeff = ['H','V','D']
         for idx1,level in enumerate(sel_pts):
             for idx2,coeff in enumerate(level):
@@ -286,21 +287,24 @@ class Toolbox():
                 else:
                     #level,mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,
                     #ratio(other/core)
-                    x2 = np.mean(coeff[3]) 
-                    x3 = np.median(coeff[3])
-                    x4 = np.std(coeff[3])
-                    x5 = Toolbox.rms(coeff[3]) 
-                    x6 = Toolbox.uncert(coeff[3])
-                    x7 = np.min(coeff[3])
-                    x8 = np.max(coeff[3])
-                    x9 = np.median(np.abs(coeff[3] - np.median(coeff[3])))
-                    x10 = scipy.stats.entropy(coeff[3].ravel())
-                    x11 = np.unique(coeff[4][np.where(coeff[4]!=-1)]).shape[0]
-                    x12 = coeff[3].shape[0]
-                    x13 = (coeff[5].shape[0] - 
+                    x2 = coeff[0]
+                    x3 = coeff[1]
+                    x4 = np.mean(coeff[3]) 
+                    x5 = np.median(coeff[3])
+                    x6 = np.std(coeff[3])
+                    x7 = Toolbox.rms(coeff[3]) 
+                    x8 = Toolbox.uncert(coeff[3])
+                    x9 = np.min(coeff[3])
+                    x10 = np.max(coeff[3])
+                    x11 = np.median(np.abs(coeff[3] - np.median(coeff[3])))
+                    x12 = scipy.stats.entropy(coeff[3].ravel())
+                    x13 = np.unique(coeff[4][np.where(coeff[4]!=-1)]).shape[0]
+                    x14 = coeff[3].shape[0]
+                    x15 = (coeff[5].shape[0] - 
                         coeff[5][np.where(coeff[5]==1)].shape[0]) / np.float(
                         coeff[5][np.where(coeff[5]==1)].shape[0])
-                    out.append((x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13))
+                    out.append((x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,
+                            x14,x15))
                     '''toy histogram
                     n,bins,patches = plt.hist(coeff[3],coeff[3].shape[0]/10, 
                         normed=False,facecolor='green',alpha=0.75)
@@ -346,7 +350,8 @@ class Toolbox():
                 if np.all(np.isnan(coeff[2])):
                     out.append( tuple([x0,x1].append([np.nan]*(nitem-2))) )
                 elif (coeff[3].shape[0] < 2):
-                    out.append( tuple([x0,x1,coeff[3][0]].append([np.nan]*(nitem-3))) )
+                    out.append( tuple([x0,x1,coeff[3][0]].append(
+                            [np.nan]*(nitem-3))) )
                 else:
                     #define the origin as the center of the array, then 
                     #calculate the angle for each of the selected peaks, using 
@@ -600,7 +605,6 @@ class Graph():
             gc.collect()
             d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,
                                                         minsize=minimalSize)
-        
         #for plotting usage
         #veil1 = np.ma.masked_where(~mAvg1,data1)
         #veil2 = np.ma.masked_where(~mAvg2,data2)
@@ -665,7 +669,6 @@ class Graph():
             elif coeff.upper() == 'V': inn_mask = mask_cV
             elif coeff.upper() == 'D': inn_mask = mask_cA
             else: raise ValueError('Coeff string must be H,V or D')
-            
             rms1 = Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
             rms2 = Toolbox.rms(data2,maskFP=True,baseMask=inn_mask)
             aux_m1 = scalMask.Mask.scaling(inn_mask,data1)
@@ -675,13 +678,12 @@ class Graph():
             std2 = np.std(data2[np.where(aux_m2)])
             avg2 = np.mean(data2[np.where(aux_m2)])
             print 'RMS ',rms1,rms2,'STD ',std1,std2,'AVG ',avg1,avg2
-            print 'uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n'
-
+            print ('uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),
+                np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n')
             thres1 = Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
             thres2 = Toolbox.rms(data2,maskFP=True,baseMask=inn_mask)
             mAvg1,pAvg1 = Toolbox.mask_join(data1,thres1,baseMask=inn_mask)
             mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=inn_mask)
-            
             #for clustering, must use coordinates of the peaks inside the mask
             coo1 = np.argwhere(pAvg1)
             coo2 = np.argwhere(pAvg2)
@@ -695,7 +697,6 @@ class Graph():
             d1_N,d1_label,d1_mask = Toolbox.cluster_dbscan(coo1,minsize=minimalSize)
             gc.collect()
             d2_N,d2_label,d2_mask = Toolbox.cluster_dbscan(coo2,minsize=minimalSize)
-            
             #for plotting usage
             #veil1 = np.ma.masked_where(~mAvg1,data1)
             #veil2 = np.ma.masked_where(~mAvg2,data2)
@@ -1049,23 +1050,25 @@ class Call():
 
     @classmethod
     def wrap3(cls,h5table,table_nm):
-        '''Wrapper for mask the inner region of DECam. It its designed ONLY for
-        Diagonal coefficients of level=2. When the mask be improved we can 
-        switch to other coeffs as well.
+        '''Wrapper for mask the inner region of DECam, levels 1 and 2.
         Inputs:
         - h5table: H5 tables of the DWT coeffs
-        - table_nm: nmae of the H5 file, from which construct a temporal method
-         to get info
+        - table_nm: name of the H5 file, from which construct a temporal method
+        to get info
         Returns: dataframe with values and column names
         '''
+        # _____________________________________________________________________
+        # *********************************************************************
+        #NOTE: the INFO queried from DESDB must be already inside the H5 table
+        #and not searched here. So this MUST be temporal only
+        #
         #first, get the info for the filename. This must be replaced by info on 
         #the header of the HDF5 tables. Then this is only a temporal solution
         fits = table_nm[:table_nm.rfind('_')] + '_compare-dflat-binned-fp.fits'
         #DB information: temporal solution while 
-        toquery = "select m.nite,p.reqnum,p.id,f.expnum,m.band, \
-                f.factor,f.rms, f.worst \
-                from flat_qa f,pfw_attempt p,miscfile m \
-                where f.filename='{0}' and m.filename=f.filename and \
+        toquery = "select m.nite,q.expnum,m.band,q.factor,q.rms,q.worst \
+                from flat_qa q,pfw_attempt p,miscfile m \
+                where q.filename='{0}' and m.filename=q.filename and \
                 m.pfw_attempt_id=p.id".format(fits)
         #outdtype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
         desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
@@ -1075,23 +1078,33 @@ class Call():
         cursor.execute(toquery)
         rows = cursor.fetchall()
         nite = np.int(rows[0][0])
-        reqnum,pfw_id,expnum,band,factor,rms,worst = [i for i in rows[0][1:]]
-        aux = [nite,reqnum,pfw_id,expnum,band,factor,rms,worst]
+        expnum,band,factor,rms,worst = [i for i in rows[0][1:]]
+        # *********************************************************************
+        # _____________________________________________________________________
         #the statistics of the values and positions for the RMS-selected peaks
-        sel,frame = Screen.inner_region(table)
+        sel,frame_shape = Screen.inner_region(table)
         statVal = Toolbox.value_dispers(sel)
-        statPos = Toolbox.posit_dispers(sel,frame)
-        #column names where fq. stands for oper.flat_qa origin, v. stands for
+        statPos = Toolbox.posit_dispers(sel,frame_shape)
+        #column names where q. stands for oper.flat_qa, v. stands for
         #values, and p. stands for positions
         print 'Metadata in the header of the DWT!! Add level to the table'
-        '''ADD LEVEL COLUMN'''
-        col = ['nite','reqnum','pfw','expnum','band','fq.factor']
-        col += ['fq.rms','fq.worst']   
-        col += ['v.avg','v.med','v.std','v.rms','v.min','v.max','v.mad','v.S']
-        col += ['v.Ncl','v.Npt','v.Nratio']
-        col += ['p.avg','p.med','p.std','p.rms','p.min','p.max','p.mad','p.S'] 
-        stat = aux + list(statVal) + list(statPos) 
-        df = pd.DataFrame([stat,],columns=col)
+        col = ['nite','expnum','band','q.factor','q.rms','q.worst']   
+        col += ['v.level','v.coeff','v.rms_all','v.uncert_all','v.mean',
+        'v.median','v.stdev','v,rms','v.uncert','v.min','v.max','v.mad',
+        'v.entropy','v.nclust','v.npeak','v.ratio']
+        col += ['p.level','p.coeff','p.mean','p.median','p.stdev','p.rms',
+        'p.uncert','p.min','p.max','p.mad','p.entropy'] 
+        #saving iteratively for each level and each coeff
+        out_stat = []
+        #as the levels and amount of coefficients is the same for value_dispers
+        #and for posit_dispersion, then we can use one as ruler for the other
+        for i1 in xrange(len(statVal)):
+            tmp = [nite,expnum,band,factor,rms,worst]
+            tmp += statVal[i1]
+            tmp += statPos[i1]
+            out_stat.append(tmp)
+            tmp = []
+        df = pd.DataFrame(out_stat,columns=col)
         return df
 
 
@@ -1139,16 +1152,19 @@ if __name__=='__main__':
     #remember to change for each year
     savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
     savename = 'reStat_' + band + '_.csv'
+    filler = 0
     if True:
+        expnum_range = range(606456,606541+1)
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
-                if ('_'+band+'_' in item):
+                expnum = int(item[1:item.find('_')])
+                if ('_'+band+'_' in item) and (expnum in expnum_range):
                     try:
                         H5tab = OpenH5(pathBinned+item)
                         table = H5tab.h5.root.coeff.FP
                         print '\t',item
                         tmp = Call.wrap3(table,item)
-                        if filler == 0: df_res = tmp
+                        if (filler == 0): df_res = tmp
                         else: df_res = pd.concat([df_res,tmp])
                         df_res.reset_index()
                         filler += 1
@@ -1159,8 +1175,9 @@ if __name__=='__main__':
                         #close open instances
                         H5tab.closetab()
                         table.close()
-        #write oout the table of results
+        print df_res.info
         exit()
+        #write oout the table of results
         df_res.to_csv(savename,index=False,header=True)
     
     '''PREVIOUS TRY
