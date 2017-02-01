@@ -1132,8 +1132,9 @@ if __name__=='__main__':
                 if ('_'+band+'_' in item) and (expnum in expnum_range):
                     try:
                         H5tab = OpenH5(pathBinned+item)
-                        table = H5tab.h5.root.coeff.FP
+                        table = H5tab.h5.root.dwt.dmeyN2
                         print '\t',item
+                        header = table.attrs.DB_INFO
                         tmp = Call.wrap3(table,item)
                         if (filler == 0): df_res = tmp
                         else: df_res = pd.concat([df_res,tmp])

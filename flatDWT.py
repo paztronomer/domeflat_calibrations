@@ -192,16 +192,17 @@ class Toolbox():
     @classmethod
     def niterange(cls,niterange,epoch):
         '''Method to ask the DB for some relevant information to run 
-        this script over a range of nights 
+        this script over a range of nights. This method also query for
+        basic information to be included in the HDF5 table
         '''
         N1,N2 = niterange
-        query = "select f.filename,f.factor,f.rms,f.worst,m.pfw_attempt_id,\
-        m.band,m.nite,f.expnum,i.path from flat_qa f, miscfile m,\
-        file_archive_info i where m.nite>={0} and m.nite<={1} and \
-        m.filename=f.filename and i.filename=f.filename and \
+        query = "select q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,\
+        m.band,m.nite,q.expnum,i.path \
+        from flat_qa q, miscfile m, file_archive_info i \
+        where q.filename=m.filename and q.filename=i.filename and \
+        m.nite>={0} and m.nite<={1} and \
         m.filetype='compare_dflat_binned_fp'".format(N1,N2)
-        datatype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
-        #query
+        datatype = ['a100','f4','f4','f4','i4','a10','i4','i4','a100']
         tab = Toolbox.dbquery(query,datatype)
         return tab
 
@@ -314,13 +315,35 @@ class Coeff(DWT):
     '''method for save results of DWT on a compressed pytables
     '''
     @classmethod
-    def set_table(cls,str_tname,Nlev):
+    def set_table(cls,tablename,Nlev):
+        '''Method for initialize the file to be filled with the results from
+        the DWT decomposition. It works either for 2 or 8 levels of 
+        decomposition.
+        Descriptions for pytables taken from "Numerical Python: A practical 
+        techniques approach for Industry"
+        '''
+        #create a new pytable HDF5 file handle. This does not represents the
+        #root group. To access the root node must use cls.h5file.root
+        cls.h5file = tables.open_file(
+            tablename,mode='w',
+            title='HDF5 file containing data of dome flat wavelet-behavior.',
+            driver='H5FD_CORE')
+        #create groups of the file handle object. Args are: path to the parent
+        #group (/), the group name, and optionally a title for the group. The  
+        #last is a descriptive attribute can be set to the group.
+        group = cls.h5file.create_group(
+            '/','dwt',
+            title='Created using PyWavelets {0}'.format(pywt.__version__))
+        #the file handle is defined, also the group inside it. Under the group
+        #we will save the DWT tables. 
+        #to create a table with mixed type structure we create a class that
+        #inherits from tables.IsDescription class
         if Nlev == 2:
             class Levels(tables.IsDescription):
                 c_A = tables.Float32Col(shape=DWT.cmlshape[0])
                 c1 = tables.Float32Col(shape=DWT.cmlshape[1])
                 c2 = tables.Float32Col(shape=DWT.cmlshape[2])
-        if Nlev == 8:
+        elif Nlev == 8:
             class Levels(tables.IsDescription):
                 c_A = tables.Float32Col(shape=DWT.cmlshape[0])
                 c1 = tables.Float32Col(shape=DWT.cmlshape[1])
@@ -331,18 +354,23 @@ class Coeff(DWT):
                 c6 = tables.Float32Col(shape=DWT.cmlshape[6])
                 c7 = tables.Float32Col(shape=DWT.cmlshape[7])
                 c8 = tables.Float32Col(shape=DWT.cmlshape[8])
-        cls.h5file = tables.open_file(str_tname,mode='w',
-                                    title='DWT multilevel decomposition',
-                                    driver='H5FD_CORE')
-        #driver_core_backing_store=0)
-        #coeff: group name, DWT coeff: brief description
-        group = cls.h5file.create_group('/','coeff','DWT coeff')
-        #FP: table name, FP wavelet decomposition:ttable title
-        cls.cml_table = cls.h5file.create_table(group,'FP',Levels,'Wavedec')
+        else:
+            raise ValueError('Method supports 2 or 8 decomposition levels.')
+        #with the table structure already defined, the table with DWT results 
+        #can be fully created. Args are: a group object or the path to the root
+        #node, the table name, the table structure specification, and 
+        #optionally the table title. The last is stored as attribute.
+        cls.cml_table = cls.h5file.create_table(
+            group,'dmeyN2',Levels,title='Mother wavelet:dmey. Levels:2.')
 
     @classmethod 
-    def fill_table(cls,coeff_tuple,Nlev):
-        #fills multilevel DWT with N=8
+    def fill_table(cls,coeff_tuple,Nlev,dict_database):
+        '''Method to fill the HDF5 file with the DWT results. It works for 2
+        and 8 levels of decomposition.
+        '''
+        #using .attrs or ._v_attrs we can access different levels in the 
+        #HDF5 structure
+        cls.cml_table.attrs.DB_INFO = dict_database 
         cml_row = Coeff.cml_table.row
         if Nlev == 2:
             for m in xrange(3):
@@ -350,7 +378,8 @@ class Coeff(DWT):
                 cml_row['c1'] = coeff_tuple[1][m]
                 cml_row['c2'] = coeff_tuple[2][m]
                 cml_row.append()
-        if Nlev == 8:
+                Coeff.cml_table.flush()
+        elif Nlev == 8:
             for m in xrange(3):
                 cml_row['c_A'] = coeff_tuple[0]
                 cml_row['c1'] = coeff_tuple[1][m]
@@ -362,9 +391,13 @@ class Coeff(DWT):
                 cml_row['c7'] = coeff_tuple[7][m]
                 cml_row['c8'] = coeff_tuple[8][m]
                 cml_row.append()
+                Coeff.cml_table.flush()
+        else:
+            raise ValueError('Method supports 2 or 8 decomposition levels.')
     
     @classmethod
     def close_table(cls):
+        Coeff.cml_table.flush()
         Coeff.h5file.close()
 
 
@@ -380,20 +413,26 @@ if __name__=='__main__':
     Y2E2       20141205 20150518     383751      438346
     Y3         20150731 20160212     459984      516846
     Y4         20160813 20170212     563912      573912
+    for Y4 I used 20160808
     '''
     BINNED = True
     CCD = False
 
     if BINNED:
         #setup samples
-        y4n = [20160808,20170212] #[20160813,20170212] entire Y4
+        yXn = [20170103,20170104]#[20161215,20161219] 
         label = 'y4'
-        print '\n=====\t=====\n\tStarting with {0}\n'.format(label.upper())
+        print '\n===\t===\n\tStarting with {0}, {1}\n'.format(label.upper(),yXn)
         #run for every group and save as H5 table files
-        dflat_tab = Toolbox.niterange(y4n,label)
+        #columns:  q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,
+        #m.band,m.nite,q.expnum,i.path
+        dflat_tab = Toolbox.niterange(yXn,label)
         rootpath = '/archive_data/desarchive/'
         outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
+        count = 1
         for k in xrange(dflat_tab.shape[0]):
+            #basic information to include in HDF5
+            binfo = dict(zip(dflat_tab.dtype.names,dflat_tab[k]))
             dirfile = rootpath + dflat_tab['path'][k] + '/'
             bin_fp = FPBinned(dirfile,dflat_tab['filename'][k]).fpBinned
             t1 = time.time()
@@ -401,7 +440,9 @@ if __name__=='__main__':
             decLev = 2
             c_ml = DWT.multi_level(bin_fp,Nlev=decLev)
             t2 = time.time()
-            print '\n\tmultilevel: {0:.2f}\''.format((t2-t1)/60.)
+            print '\n{2}--{1}, multilevel: {0:.2f}\'\''.format(t2-t1,
+                                                     dflat_tab['filename'][k],
+                                                     count)
             #init table
             fnout = outpath
             fnout += dflat_tab['filename'][k][:
@@ -409,10 +450,11 @@ if __name__=='__main__':
             fnout += label + '.h5'
             Coeff.set_table(fnout,decLev)
             #fill table
-            Coeff.fill_table(c_ml,decLev)
+            Coeff.fill_table(c_ml,decLev,binfo)
             #close table
             Coeff.close_table()    
-    
+            count += 1
+
     if False:
         '''For a single exposure, CCD by CCD
         '''
