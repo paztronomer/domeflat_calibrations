@@ -280,10 +280,9 @@ class Toolbox():
                 x0 = idx1 + 1
                 x1 = labcoeff[idx2]
                 if np.all(np.isnan(coeff[2])):
-                    out.append(tuple([x0,x1].append([np.nan]*(nitem-2))))
+                    out.append(tuple([x0,x1] + [np.nan]*(nitem-2)))
                 elif coeff[3].shape[0] < 2:
-                    out.append( tuple([x0,x1,coeff[3][0]].append(
-                            [np.nan]*(nitem-3))) )
+                    out.append(tuple([x0,x1,coeff[3][0]] + [np.nan]*(nitem-3)))
                 else:
                     #level,mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,
                     #ratio(other/core)
@@ -348,10 +347,9 @@ class Toolbox():
                 y0 = idx1+1
                 y1 = labcoeff[idx2]
                 if np.all(np.isnan(coeff[2])):
-                    out.append( tuple([x0,x1].append([np.nan]*(nitem-2))) )
+                    out.append(tuple([y0,y1] + [np.nan]*(nitem-2)))
                 elif (coeff[3].shape[0] < 2):
-                    out.append( tuple([x0,x1,coeff[3][0]].append(
-                            [np.nan]*(nitem-3))) )
+                    out.append(tuple([y0,y1,coeff[3][0]] + [np.nan]*(nitem-3)))
                 else:
                     #define the origin as the center of the array, then 
                     #calculate the angle for each of the selected peaks, using 
@@ -1117,7 +1115,41 @@ if __name__=='__main__':
     #note that for band is case sensitive
     pathBinned = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
     band = 'g'
+    tag = 'yn'
     print '\n\tStatistics on all available tables for band: {0}'.format(band)
+
+    '''TO SAVE STATISTICS
+    '''
+    #remember to change for each year
+    savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
+    savename = 'qa_' + band + '_' + tag + '_.csv'
+    filler = 0
+    if True:
+        expnum_range = range(606456,606541+1)
+        for (path,dirs,files) in os.walk(pathBinned):
+            for index,item in enumerate(files):   #file is a string
+                expnum = int(item[1:item.find('_')])
+                if ('_'+band+'_' in item) and (expnum in expnum_range):
+                    try:
+                        H5tab = OpenH5(pathBinned+item)
+                        table = H5tab.h5.root.coeff.FP
+                        print '\t',item
+                        tmp = Call.wrap3(table,item)
+                        if (filler == 0): df_res = tmp
+                        else: df_res = pd.concat([df_res,tmp])
+                        filler += 1
+                        #sel,frame = Screen.inner_region(table)
+                        #Toolbox.value_dispers(sel)
+                        #Toolbox.posit_dispers(sel,frame)
+                    finally:
+                        #close open instances
+                        H5tab.closetab()
+                        table.close()
+        df_res.reset_index(drop=True,inplace=True)
+        print df_res.info
+        exit()
+        #write oout the table of results
+        df_res.to_csv(savename,index=False,header=True)
      
     '''TO VISUALIZE BY EXPNUM RANGE
     '''
@@ -1143,44 +1175,8 @@ if __name__=='__main__':
                         #close open instances
                         H5tab.closetab()
                         table.close()
-
-    '''TO SAVE STATISTICS
-    '''
-
-    '''NEW TRY
-    '''
-    #remember to change for each year
-    savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
-    savename = 'reStat_' + band + '_.csv'
-    filler = 0
-    if True:
-        expnum_range = range(606456,606541+1)
-        for (path,dirs,files) in os.walk(pathBinned):
-            for index,item in enumerate(files):   #file is a string
-                expnum = int(item[1:item.find('_')])
-                if ('_'+band+'_' in item) and (expnum in expnum_range):
-                    try:
-                        H5tab = OpenH5(pathBinned+item)
-                        table = H5tab.h5.root.coeff.FP
-                        print '\t',item
-                        tmp = Call.wrap3(table,item)
-                        if (filler == 0): df_res = tmp
-                        else: df_res = pd.concat([df_res,tmp])
-                        df_res.reset_index()
-                        filler += 1
-                        #sel,frame = Screen.inner_region(table)
-                        #Toolbox.value_dispers(sel)
-                        #Toolbox.posit_dispers(sel,frame)
-                    finally:
-                        #close open instances
-                        H5tab.closetab()
-                        table.close()
-        print df_res.info
-        exit()
-        #write oout the table of results
-        df_res.to_csv(savename,index=False,header=True)
     
-    '''PREVIOUS TRY
+    '''PREVIOUS TRY TO SAVE STATISTICS
     '''
     if False:
         #to make statistics and save to file
