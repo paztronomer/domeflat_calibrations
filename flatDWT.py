@@ -197,12 +197,12 @@ class Toolbox():
         '''
         N1,N2 = niterange
         query = "select q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,\
-        m.band,m.nite,q.expnum,i.path \
-        from flat_qa q, miscfile m, file_archive_info i \
+        m.band,m.nite,q.expnum,pfw.reqnum,i.path \
+        from flat_qa q, miscfile m, file_archive_info i, pfw_attempt pfw \
         where q.filename=m.filename and q.filename=i.filename and \
-        m.nite>={0} and m.nite<={1} and \
+        m.nite>={0} and m.nite<={1} and m.pfw_attempt_id=pfw.id and \
         m.filetype='compare_dflat_binned_fp'".format(N1,N2)
-        datatype = ['a100','f4','f4','f4','i4','a10','i4','i4','a100']
+        datatype = ['a100','f4','f4','f4','i4','a10','i4','i4','i4','a100']
         tab = Toolbox.dbquery(query,datatype)
         return tab
 

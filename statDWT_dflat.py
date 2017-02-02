@@ -1055,38 +1055,16 @@ class Call():
         to get info
         Returns: dataframe with values and column names
         '''
-        # _____________________________________________________________________
-        # *********************************************************************
-        #NOTE: the INFO queried from DESDB must be already inside the H5 table
-        #and not searched here. So this MUST be temporal only
-        #
-        #first, get the info for the filename. This must be replaced by info on 
-        #the header of the HDF5 tables. Then this is only a temporal solution
-        fits = table_nm[:table_nm.rfind('_')] + '_compare-dflat-binned-fp.fits'
-        #DB information: temporal solution while 
-        toquery = "select m.nite,q.expnum,m.band,q.factor,q.rms,q.worst \
-                from flat_qa q,pfw_attempt p,miscfile m \
-                where q.filename='{0}' and m.filename=q.filename and \
-                m.pfw_attempt_id=p.id".format(fits)
-        #outdtype = ['a80','f4','f4','f4','i4','a10','i4','i4','a100']
-        desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
-        section = 'db-desoper'
-        dbi = desdbi.DesDbi(desfile,section)
-        cursor = dbi.cursor()
-        cursor.execute(toquery)
-        rows = cursor.fetchall()
-        nite = np.int(rows[0][0])
-        expnum,band,factor,rms,worst = [i for i in rows[0][1:]]
-        # *********************************************************************
-        # _____________________________________________________________________
+        #get the dictionary from the HDF5 table and 
+        header = table.attrs.DB_INFO
         #the statistics of the values and positions for the RMS-selected peaks
         sel,frame_shape = Screen.inner_region(table)
         statVal = Toolbox.value_dispers(sel)
         statPos = Toolbox.posit_dispers(sel,frame_shape)
-        #column names where q. stands for oper.flat_qa, v. stands for
-        #values, and p. stands for positions
-        print 'Metadata in the header of the DWT!! Add level to the table'
-        col = ['nite','expnum','band','q.factor','q.rms','q.worst']   
+        #column names where v. stands for values, p. for positions, and db. for
+        #DES database
+        col = ['db.nite','db.expnum','db.band','db.reqnum','db.filename']
+        col += ['db.factor','db.rms','db.worst']
         col += ['v.level','v.coeff','v.rms_all','v.uncert_all','v.mean',
         'v.median','v.stdev','v,rms','v.uncert','v.min','v.max','v.mad',
         'v.entropy','v.nclust','v.npeak','v.ratio']
@@ -1097,7 +1075,9 @@ class Call():
         #as the levels and amount of coefficients is the same for value_dispers
         #and for posit_dispersion, then we can use one as ruler for the other
         for i1 in xrange(len(statVal)):
-            tmp = [nite,expnum,band,factor,rms,worst]
+            tmp = [header['nite'],header['expnum'],header['band'],
+                header['reqnum'],header['filename'],
+                header['factor'],header['rms'],header['worst']]
             tmp += statVal[i1]
             tmp += statPos[i1]
             out_stat.append(tmp)
@@ -1134,21 +1114,15 @@ if __name__=='__main__':
                         H5tab = OpenH5(pathBinned+item)
                         table = H5tab.h5.root.dwt.dmeyN2
                         print '\t',item
-                        header = table.attrs.DB_INFO
                         tmp = Call.wrap3(table,item)
                         if (filler == 0): df_res = tmp
                         else: df_res = pd.concat([df_res,tmp])
                         filler += 1
-                        #sel,frame = Screen.inner_region(table)
-                        #Toolbox.value_dispers(sel)
-                        #Toolbox.posit_dispers(sel,frame)
                     finally:
                         #close open instances
                         H5tab.closetab()
                         table.close()
         df_res.reset_index(drop=True,inplace=True)
-        print df_res.info
-        exit()
         #write oout the table of results
         df_res.to_csv(savename,index=False,header=True)
      
