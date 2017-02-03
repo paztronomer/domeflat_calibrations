@@ -270,7 +270,6 @@ class Toolbox():
         Returns: tuple with values for each level-coeff combination plus the 
         RMS and uncertainty for all the coeffs inside the mask
         '''
-        print 'VALUES'
         #number of entries in the output tuple is important for non peak case
         out = []
         nitem = 16
@@ -334,7 +333,6 @@ class Toolbox():
         of the DWT.
         Returns: tuple with values for each level-coeff combination
         '''
-        print 'POSITION'
         out = []
         nitem = 11
         labcoeff = ['H','V','D']
@@ -381,7 +379,42 @@ class Toolbox():
                     '''PENDING: ADD PCA ORIENTATION OF PPAL 3 VECTORS'''
         return out
 
-        
+    @classmethod
+    def dbquery(cls,toquery,outdtype,dbsection='db-desoper',help_txt=False):
+        '''the personal setup file .desservices.ini must be pointed by desfile
+        DB section by default will be desoper
+        '''
+        desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
+        section = dbsection
+        dbi = desdbi.DesDbi(desfile,section)
+        if help_txt: help(dbi)
+        cursor = dbi.cursor()
+        cursor.execute(toquery)
+        cols = [line[0].lower() for line in cursor.description]
+        rows = cursor.fetchall()
+        outtab = np.rec.array(rows,dtype=zip(cols,outdtype))
+        return outtab
+
+    @classmethod
+    def band_expnum(cls,niterange):
+        '''For a niterange, returns the maximum/minumum in EXPNUM and the 
+        BAND for the range
+        '''
+        q1 = "select distinct(m.band) from flat_qa q,miscfile m "
+        q1 += "where q.filename=m.filename and "
+        q1 += "m.nite>={0} and m.nite<={1} order by m.band".format(
+            niterange[0],niterange[1])
+        q2 = "select min(q.expnum),max(q.expnum) from flat_qa q,miscfile m "
+        q2 += "where q.filename=m.filename and "
+        q2 += "m.nite>={0} and m.nite<={1} order by m.band".format(
+            niterange[0],niterange[1])
+        dtype1 = ['a10']
+        dtype2 = ['i4','i4']
+        tab1 = Toolbox.dbquery(q1,dtype1)
+        tab2 = Toolbox.dbquery(q2,dtype2)
+        return tab1['band'][:],[tab2['min(q.expnum)'],tab2['max(q.expnum)']]
+            
+
 class Screen():
     @classmethod
     def inner_region(cls,h5table,Nlev=2,minCluster=3):
@@ -1065,8 +1098,8 @@ class Call():
         statPos = Toolbox.posit_dispers(sel,frame_shape)
         #column names where v. stands for values, p. for positions, and db. for
         #DES database
-        col = ['db.nite','db.expnum','db.band','db.reqnum','db.filename']
-        col += ['db.factor','db.rms','db.worst']
+        col = ['db.nite','db.expnum','db.band','db.reqnum','db.pfw_attempt_id']
+        col += ['db.filename','db.factor','db.rms','db.worst']
         col += ['v.level','v.coeff','v.rms_all','v.uncert_all','v.mean',
         'v.median','v.stdev','v,rms','v.uncert','v.min','v.max','v.mad',
         'v.entropy','v.nclust','v.npeak','v.ratio']
@@ -1078,7 +1111,7 @@ class Call():
         #and for posit_dispersion, then we can use one as ruler for the other
         for i1 in xrange(len(statVal)):
             tmp = [header['nite'],header['expnum'],header['band'],
-                header['reqnum'],header['filename'],
+                header['reqnum'],header['pfw_attempt_id'],header['filename'],
                 header['factor'],header['rms'],header['worst']]
             tmp += statVal[i1]
             tmp += statPos[i1]
@@ -1096,17 +1129,54 @@ if __name__=='__main__':
     #this is the path to the zero-padded DWT tables
     #note that for band is case sensitive
     pathBinned = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
-    band = 'g'
-    tag = 'yn'
-    print '\n\tStatistics on all available tables for band: {0}'.format(band)
 
-    '''TO SAVE STATISTICS
+    '''TO SAVE STATISTICS FOR A NITERANGE, ALL AVAILABLE BANDS
+    '''
+    if True:
+        #remember to change-------------
+        nite_range = [20160813,20170212]
+        tag = 'y4'
+        #-------------------------------
+        band_range,expnum_range = Toolbox.band_expnum(nite_range)
+        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
+        counter = 0
+        print "\nStatistics on niterange: {0}. Year: {1}".format(nite_range,tag) 
+        for b in band_range:
+            gc.collect()
+            print '\nStarting with band:{0}\t{1}'.format(b,time.ctime())
+            savename = 'qa_' + b + '_' + tag + '_.csv'
+            for (path,dirs,files) in os.walk(pathBinned):
+                for index,item in enumerate(files):   #file is a string
+                    expnum = int(item[1:item.find('_')])
+                    if (('_'+b+'_r' in item) and (expnum >= expnum_range[0])
+                    and (expnum <= expnum_range[1])):
+                        try:
+                            H5tab = OpenH5(pathBinned+item)
+                            table = H5tab.h5.root.dwt.dmeyN2
+                            print '{0}-- {1}'.format(counter+1,item)
+                            tmp = Call.wrap3(table,item)
+                            if (counter == 0): df_res = tmp
+                            else: df_res = pd.concat([df_res,tmp])
+                            counter += 1
+                        finally:
+                            #close open instances
+                            H5tab.closetab()
+                            table.close()
+            df_res.reset_index(drop=True,inplace=True)
+            #write oout the table of results
+            df_res.to_csv(savename,index=False,header=True)
+
+
+    '''TO SAVE STATISTICS FOR ALL DWT TABLES IN A EXPNUM RANGE
     '''
     #remember to change for each year
-    savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
-    savename = 'qa_' + band + '_' + tag + '_.csv'
-    filler = 0
-    if True:
+    if False:
+        tag = 'yn'
+        band = 'g'
+        print '\n\tStatistics on all available tables, band: {0}'.format(band)
+        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
+        savename = 'qa_' + band + '_' + tag + '_.csv'
+        filler = 0
         expnum_range = range(606456,606541+1)
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
