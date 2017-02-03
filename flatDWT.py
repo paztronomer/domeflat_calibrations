@@ -190,7 +190,7 @@ class Toolbox():
         return outtab
 
     @classmethod
-    def niterange(cls,niterange,epoch):
+    def niterange(cls,niterange):
         '''Method to ask the DB for some relevant information to run 
         this script over a range of nights. This method also query for
         basic information to be included in the HDF5 table
@@ -413,20 +413,19 @@ if __name__=='__main__':
     Y2E2       20141205 20150518     383751      438346
     Y3         20150731 20160212     459984      516846
     Y4         20160813 20170212     563912      573912
-    for Y4 I used 20160808
     '''
     BINNED = True
     CCD = False
 
     if BINNED:
         #setup samples
-        yXn = [20170103,20170104]#[20161215,20161219] 
+        yXn = [20160813,20170212] 
         label = 'y4'
         print '\n===\t===\n\tStarting with {0}, {1}\n'.format(label.upper(),yXn)
         #run for every group and save as H5 table files
         #columns:  q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,
         #m.band,m.nite,q.expnum,i.path
-        dflat_tab = Toolbox.niterange(yXn,label)
+        dflat_tab = Toolbox.niterange(yXn)
         rootpath = '/archive_data/desarchive/'
         outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
         count = 1
