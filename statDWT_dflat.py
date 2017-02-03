@@ -282,10 +282,12 @@ class Toolbox():
                 if np.all(np.isnan(coeff[2])):
                     out.append(tuple([x0,x1] + [np.nan]*(nitem-2)))
                 elif coeff[3].shape[0] < 2:
-                    out.append(tuple([x0,x1,coeff[3][0]] + [np.nan]*(nitem-3)))
+                    #for single peak: level,coeff label,and Npeak are non NaN
+                    out.append(tuple([x0,x1,coeff[3][0]] + [np.nan]*(nitem-5) +
+                             [1,np.nan]))
                 else:
-                    #level,mean,median,stdev,rms,min,max,MAD,S,num_clust,num_pts,
-                    #ratio(other/core)
+                    #level,coeff_label,RMS all,uncert all,mean,median,stdev,rms,
+                    #uncert,min,max,MAD,S,num_clust,num_pts,ratio(other/core)
                     x2 = coeff[0]
                     x3 = coeff[1]
                     x4 = np.mean(coeff[3]) 
