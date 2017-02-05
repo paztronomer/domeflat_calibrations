@@ -300,9 +300,13 @@ class Toolbox():
                     x12 = scipy.stats.entropy(coeff[3].ravel())
                     x13 = np.unique(coeff[4][np.where(coeff[4]!=-1)]).shape[0]
                     x14 = coeff[3].shape[0]
-                    x15 = (coeff[5].shape[0] - 
-                        coeff[5][np.where(coeff[5]==1)].shape[0]) / np.float(
-                        coeff[5][np.where(coeff[5]==1)].shape[0])
+                    try:
+                        x15 = (coeff[5].shape[0] - 
+                            coeff[5][np.where(coeff[5]==1)].shape[0])/np.float(
+                            coeff[5][np.where(coeff[5]==1)].shape[0])
+                    except:
+                        #in case division by zero
+                        x15 = np.nan
                     out.append((x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,
                             x14,x15))
                     '''toy histogram
