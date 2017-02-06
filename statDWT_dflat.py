@@ -1142,10 +1142,10 @@ if __name__=='__main__':
         tag = 'y4'
         #-------------------------------
         band_range,expnum_range = Toolbox.band_expnum(nite_range)
-        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
-        counter = 0
+        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/'
         print "\nStatistics on niterange: {0}. Year: {1}".format(nite_range,tag) 
         for b in band_range:
+            counter = 0
             gc.collect()
             print '\nStarting with band:{0}\t{1}'.format(b,time.ctime())
             savename = 'qa_' + b + '_' + tag + '_.csv'
@@ -1169,7 +1169,7 @@ if __name__=='__main__':
             df_res.reset_index(drop=True,inplace=True)
             #write oout the table of results
             df_res.to_csv(savename,index=False,header=True)
-
+            df_res = None
 
     '''TO SAVE STATISTICS FOR ALL DWT TABLES IN A EXPNUM RANGE
     '''
