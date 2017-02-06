@@ -1148,7 +1148,7 @@ if __name__=='__main__':
             counter = 0
             gc.collect()
             print '\nStarting with band:{0}\t{1}'.format(b,time.ctime())
-            savename = 'qa_' + b + '_' + tag + '_.csv'
+            savename = 'qa_' + b + '_' + tag + '.csv'
             for (path,dirs,files) in os.walk(pathBinned):
                 for index,item in enumerate(files):   #file is a string
                     expnum = int(item[1:item.find('_')])
