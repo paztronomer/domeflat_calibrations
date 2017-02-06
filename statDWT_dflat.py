@@ -1105,7 +1105,7 @@ class Call():
         col = ['db.nite','db.expnum','db.band','db.reqnum','db.pfw_attempt_id']
         col += ['db.filename','db.factor','db.rms','db.worst']
         col += ['v.level','v.coeff','v.rms_all','v.uncert_all','v.mean',
-        'v.median','v.stdev','v,rms','v.uncert','v.min','v.max','v.mad',
+        'v.median','v.stdev','v.rms','v.uncert','v.min','v.max','v.mad',
         'v.entropy','v.nclust','v.npeak','v.ratio']
         col += ['p.level','p.coeff','p.mean','p.median','p.stdev','p.rms',
         'p.uncert','p.min','p.max','p.mad','p.entropy'] 
@@ -1179,7 +1179,7 @@ if __name__=='__main__':
         band = 'g'
         print '\n\tStatistics on all available tables, band: {0}'.format(band)
         savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
-        savename = 'qa_' + band + '_' + tag + '_.csv'
+        savename = 'qa_' + band + '_' + tag + '.csv'
         filler = 0
         expnum_range = range(606456,606541+1)
         for (path,dirs,files) in os.walk(pathBinned):
