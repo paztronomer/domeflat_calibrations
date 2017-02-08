@@ -473,6 +473,8 @@ class Screen():
                     model = mask_H
                 elif (ind1 == 0 and ind2 == 1):
                     model = mask_V
+                elif (ind1 == 0 and ind2 == 2):
+                    model = mask_D
                 else:
                     model = mask_A
                 #rms and uncertainty of all coefficients
@@ -552,7 +554,7 @@ class TimeSerie():
     
 class Graph():
     @classmethod
-    def filter_plot(cls,mask_cA,mask_cH,mask_cV,data1,data2,coeff,fname,
+    def filter_plot(cls,mask_cA,mask_cH,mask_cV,mask_cD,data1,data2,coeff,fname,
                 minimalSize=3):
         '''Method for plotting on the same frame the DWT for level 1 and 2,
         belonging to Horizontal, Vertical and Diagonal coefficients.
@@ -592,7 +594,7 @@ class Graph():
                                             iterations=1).astype(bool)
         if coeff.upper() == 'H': inn_mask = mask_cH
         elif coeff.upper() == 'V': inn_mask = mask_cV
-        elif coeff.upper() == 'D': inn_mask = mask_cA
+        elif coeff.upper() == 'D': inn_mask = mask_cD
         else: raise ValueError('Coeff string must be H,V or D')
        
         #just for testing values
@@ -609,7 +611,7 @@ class Graph():
         print ('uncert: ',np.sqrt(np.square(rms1)-np.square(avg1)),
             np.sqrt(np.square(rms2)-np.square(avg2)),'\n\n')
 
-        #for level:1 use Horizontal and Vertical masks 
+        #for level:1 use Horizontal and Vertical mnd Diagonal asks 
         #for level:2 use the Average mask for all the coeffcients
         thres1 = 1.*Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
         thres2 = 1.*Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
@@ -999,6 +1001,7 @@ class Call():
         '''Call the method for clustering.DBSCAN different coefficients,
         through the plotting method
         '''
+        print 'Wrap 1'
         #boolean mask made in scalMask_dflat
         npyMask_A = np.load('/work/devel/fpazch/shelf/cA_mask.npy')
         npyMask_H = np.load('/work/devel/fpazch/shelf/cH_mask.npy')
@@ -1015,21 +1018,21 @@ class Call():
                 #for level 1, c1[]
                 #pos1H = Graph.filter_plot(c1[0]*c1[0],(1,'H'))
                 #pos2H = Graph.filter_plot(c2[0]*c2[0],(2,'H'))
-                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,npyMask_D,
                                 c1[0]*c1[0],c2[0]*c2[0],'H',fname)
             if True:
                 print '\t=== performing over c_V ==='
                 #for level 1, c1[]
                 #pos1V = Graph.filter_plot(c1[1]*c1[1],(1,'V'))
                 #pos2V = Graph.filter_plot(c2[1]*c2[1],(2,'V'))
-                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,npyMask_D,
                                 c1[1]*c1[1],c2[1]*c2[1],'V',fname)
             if True:
                 print '\t=== performing over c_D ==='
                 #for level 1, c1[]
                 #pos1D = Graph.filter_plot(c1[2]*c1[2],(1,'D'))
                 #pos2D = Graph.filter_plot(c2[2]*c2[2],(2,'D'))
-                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,
+                Graph.filter_plot(npyMask_A,npyMask_H,npyMask_V,npyMask_D,
                                 c1[2]*c1[2],c2[2]*c2[2],'D',fname)
         else:
             print '\n\t=== Levels not being N=%d aren\'t still setup ==='%(Nlev)
@@ -1205,7 +1208,10 @@ if __name__=='__main__':
     '''TO VISUALIZE BY EXPNUM RANGE
     '''
     if False:
-        expnum_range = range(606456,606541+1)#(460179,516693)#(606738,606824+1)
+        #stable period in Y4: sept01 to sept10 570284,572853
+        expnum_range = range(570284,572853+1)
+        #(606456,606541+1)#(460179,516693)#(606738,606824+1)
+        band = 'g'
         opencount = 0
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
@@ -1217,7 +1223,7 @@ if __name__=='__main__':
                     print '{0} ___ {1} Iter: {2}'.format(item,index+1,opencount)
                     try:
                         H5tab = OpenH5(pathBinned+item)
-                        table = H5tab.h5.root.coeff.FP
+                        table = H5tab.h5.root.dwt.dmeyN2
                         Call.wrap1(table,item)
                         #Graph.decomp(table,Nlev=2)
                         #Graph.histogram(table,Nlev=2)     
