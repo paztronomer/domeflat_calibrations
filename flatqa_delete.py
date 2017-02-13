@@ -15,15 +15,15 @@ class Utility():
         gets all the filetypes availables for each pfw_attempt_id
         '''
         #list all tables in the DB
-        q_all = "select distinct OBJECT_NAME from DBA_OBJECTS where \
-                OBJECT_TYPE='TABLE' and OWNER='DES_ADMIN'"
-        
+        q_all = "select distinct OBJECT_NAME"
+        q_all += " from DBA_OBJECTS"
+        q_all += " where OBJECT_TYPE='TABLE' and OWNER='DES_ADMIN'"
         print '\tQuery on req/user: {0}/{1}'.format(reqnum,user_db)
         #input of triplet plus unique pfw_attempt_id (56 rows)
-        q1 = "select p.unitname,p.attnum,p.reqnum,p.id,p.user_created_by \
-            from pfw_attempt p where p.reqnum={0} and \
-            p.user_created_by='{1}'".format(reqnum,user_db.upper())
-        
+        q1 = "select p.unitname,p.attnum,p.reqnum,p.id,p.user_created_by"
+        q1 += " from pfw_attempt p"
+        q1 += " where p.reqnum={0} and p.user_created_by='{1}'".format(reqnum,
+                                                                user_db.upper())
         desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
         section = 'db-desoper'
         dbi = desdbi.DesDbi(desfile,section)
@@ -51,8 +51,10 @@ class Utility():
         aux_fill = []
         for i in xrange(data1.shape[0]):
             pfw_id = data1.id[i] #or data1['id'][i]
-            q2 = 'select distinct(d.filetype),d.pfw_attempt_id from desfile d \
-                where d.pfw_attempt_id={0}'.format(pfw_id)
+            #WARNING : REVIEW THE QUERIES! SOME LOOK NOT GOOD
+            q2 = "select distinct(d.filetype), d.pfw_attempt_id"
+            q2 += " from desfile d"
+            q2 += " where d.pfw_attempt_id={0}".format(pfw_id)
             cursor2 = dbi.cursor()
             cursor2.execute(q2)
             kw = [item[0].lower() for item in cursor2.description]
@@ -76,23 +78,29 @@ class Utility():
                                                                 reqnum,attnum)
         try:
             if modify:
-                cmd = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4} --dbupdate'.format(unitname,
-                                                                    reqnum,
-                                                                    attnum,
-                                                                    db,mark)
+                cmd = "datastate.py --unitname {0}".format(unitname)
+                cmd += " --reqnum {0}".format(reqnum)
+                cmd += " --attnum {0}".format(attnum)
+                cmd += " --section {0}".format(db)
+                cmd += " --newstate {0}".format(mark)
+                cmd += " --dbupdate"
             else:
-                cmd = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4}'.format(unitname,reqnum,attnum,
-                                                        db,mark)
+                cmd = "datastate.py --unitname {0}".format(unitname)
+                cmd += " --reqnum {0}".format(reqnum)
+                cmd += " --attnum {0}".format(attnum)
+                cmd += " --section {0}".format(db)
+                cmd += " --newstate {0}".format(mark)
             ask = subprocess.Popen(cmd.split(),stdout=subprocess.PIPE)
             output,error = ask.communicate()
             ask.wait()
             
             #INFO
-            aux_info = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4}'.format(unitname,reqnum,attnum,
-                                                        db,mark)
+            aux_info = "datastate.py"
+            aux_info += " --unitname {0}".format(unitname)
+            aux_info += " --reqnum {0}".format(reqnum)
+            aux_info += " --attnum {0}".format(attnum)
+            aux_info += " --section {0}".format(db)
+            aux_info += " --newstate {0}".format(mark)
             outMsg,errMsg = subprocess.Popen(aux_info.split(),
                                         stdout=subprocess.PIPE).communicate()
             print '\n',outMsg[outMsg.find('Current'):]
@@ -105,10 +113,9 @@ class Utility():
 
     def delete_junk(self,unitname,reqnum,attnum,filetype,pfw_attempt_id,
                 archive='desar2home',
-                exclusion=['compare_dflat_binned_fp'],
+                exclusion=['pixcor_dflat_binned_fp'],
                 del_opt='yes'):
         '''To keep xtalked files: 
-        exclusion=['compare_dflat_binned_fp','xtalked_dflat'],
         Different options for del_opt: yes/no/diff/print
         setup -v firstcut Y4N+2
         '''
@@ -183,7 +190,9 @@ class Utility():
             datacheck = np.rec.array(auxOut,dtype=[('filetype','a50'),
                                                 ('pfw_attempt_id','i4'),
                                                 ('flag','a80')])
-            np.savetxt('/home/fpazch/Code_deslogin/checkData_flatDEL.csv',
+            auxname = '/home/fpazch/Result_box/logs_flatDelete/'
+            auxname += 'checkPixcor_flatDEL_r'+str(reqnum)+'.csv'
+            np.savetxt(auxname,
                     datacheck,delimiter=',',fmt='%s,%d,%s',
                     header='filetype,pfw_attempt_id,flag')
 
@@ -191,7 +200,11 @@ class Utility():
 if __name__=='__main__':
     print '\n**********\nRemember to submit from DESSUB or DESAR2\n**********'
     toCall = Utility()
-    #toCall.do_job(2625,'fpazch')
-    toCall.do_job(2756,'fpazch')
+    #reqnum_delete = [2777,2769,2776,2756,2748,2751,2743,2744]
+    reqnum_delete = [2782,2783,2807,2808]
+    for req in reqnum_delete:
+        print '\n\n========================\n\tREQNUM={0}'.format(req)
+        print '\t{0}\n========================'.format(time.ctime())
+        toCall.do_job(req,'fpazch')
 
     print '\n (THE END)'  
