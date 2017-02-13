@@ -39,21 +39,30 @@ class Compare():
         - runsite: string containing the ID of the site (fermigrid,descmp4,etc)
         '''
         #to get extrema of the range for look into flat_qa
-        que1 = "select min(e.expnum), max(e.expnum) from exposure e \
-        where e.obstype='dome flat' and nite>={0} and nite<={1}".format(
-            dates[0],dates[1])
+        que1 = "select min(e.expnum), max(e.expnum) from exposure e "
+        que1 += "where e.obstype='dome flat' "
+        que1 += "and nite>={0} and nite<={1} ".format(dates[0],dates[1])
         #to get the list of expnums from exposure table
-        que2 = "select e.expnum,e.nite from exposure e where \
-        obstype='dome flat' and nite>={0} and nite<={1} order by \
-        e.expnum".format(dates[0],dates[1])
+        que2 = "select e.expnum,e.nite from exposure e "
+        que2 += "where obstype='dome flat' and nite>={0} and nite<={1} ".format(
+            dates[0],dates[1])
+        que2 += "order by e.expnum"
         res1 = Toolbox.dbquery(que1,['i4','i4'])
         res2 = Toolbox.dbquery(que2,['i4','i4'])
         #print res1.dtype.names
         #to get the expnums from flat_qa in the datarange from exposure 
-        que3 = "select q.expnum,m.nite from flat_qa q, miscfile m \
-        where q.expnum>={0} and q.expnum<={1} and m.filename=q.filename \
-        order by q.expnum".format(res1['min(e.expnum)'][0],
-                                            res1['max(e.expnum)'][0])
+        que3 = "select q.expnum,m.nite "
+        que3 += "from flat_qa q, miscfile m, miscfile n, file_archive_info i "
+        que3 += "where m.filename=q.filename "
+        que3 += "and n.filename=i.filename "
+        que3 += "and q.expnum between {0} and {1} ".format(
+            res1['min(e.expnum)'][0],res1['max(e.expnum)'][0])
+        que3 += "and m.pfw_attempt_id=n.pfw_attempt_id "
+        que3 += "and m.expnum=n.expnum "
+        que3 += "and m.filetype='compare_dflat_binned_fp'"
+        que3 += "and n.filetype='pixcor_dflat_binned_fp'"
+        que3 += "order by q.expnum"
+
         res3 = Toolbox.dbquery(que3,['i4','i4'])
         #compare both and save the missing ones in flat_qa (if any)
         if (res2['expnum'].shape[0] == res3['expnum'].shape[0]):
@@ -77,11 +86,13 @@ class Compare():
                 for m in aux_expn:
                     flat_txt = str(m)+'.csv'
                     auxN = res2['nite'][np.where(res2['expnum']==m)][0]
-                    p1="submit_nitelycal.py --db_section db-desoper --campaign "
-                    p1+="fpazch_Y4N --eups_stack firstcut Y4N+2 --queue_size 1 "
-                    p1+="--target_site {0} --flatlist {1} ".format(runsite,
+                    p1 = "submit_nitelycal.py --db_section db-desoper"
+                    p1 += " --campaign fpazch_Y4N --eups_stack firstcut Y4N+2"
+                    p1 += " --queue_size 1 "
+                    p1 += " --target_site {0} --flatlist {1} ".format(runsite,
                                                                 flat_txt)
-                    p1+="--nite {0} --jira_summary='{1}' --count\n".format(auxN,label)
+                    p1 += " --nite {0} --jira_summary='{1}'".format(auxN,label)
+                    p1 += " --count\n"
                     bashfile.write(p1)
                 bashfile.write("echo {0}:END AT $(date) $hostname\n".format(
                             runsite))
@@ -100,10 +111,11 @@ class Compare():
                 outfile.write("echo {0}:START AT $(date) $hostname\n".format(
                             runsite))
                 for i in aux_nite:
-                    p1="submit_nitelycal.py --db_section db-desoper --campaign "
-                    p1+="fpazch_Y4N --eups_stack firstcut Y4N+2 --queue_size 1 "
-                    p1+="--target_site {0} --nite {1} ".format(runsite,i)
-                    p1+="--jira_summary='{0}'\n".format(label)
+                    p1 = "submit_nitelycal.py --db_section db-desoper" 
+                    p1 += " --campaign fpazch_Y4N --eups_stack firstcut Y4N+2" 
+                    p1 += " --queue_size 1 "
+                    p1 += " --target_site {0} --nite {1}".format(runsite,i)
+                    p1 += " --jira_summary='{0}'\n".format(label)
                     outfile.write(p1)
                 outfile.write("echo {0}:END AT $(date) $hostname\n".format(
                             runsite))
@@ -111,8 +123,8 @@ class Compare():
             raise ValueError('No output file was selected to be created.')
 
 if __name__=='__main__':
-    Compare.missing_sh([20130815,20140209],'flatqa_y1','CampusClusterPrecal',
-                    'flatqa_y1_try4_EXPNUM',runEXP=True)
+    Compare.missing_sh([20150731,20160212],'flatqa_y3','CampusClusterPrecal',
+                    'flatqa_y3_missing_EXPNUM.sh',runEXP=True)
     
     '''
     NAME                 MINNITE  MAXNITE   MINEXPNUM  MAXEXPNUM
