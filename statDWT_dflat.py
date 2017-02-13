@@ -404,12 +404,20 @@ class Toolbox():
         '''For a niterange, returns the maximum/minumum in EXPNUM and the 
         BAND for the range
         '''
-        q1 = "select distinct(m.band) from flat_qa q,miscfile m "
-        q1 += "where q.filename=m.filename and "
+        q1 = "select distinct(m.band) from flat_qa q,miscfile m,miscfile n,  "
+        q1 += "file_archive_info i "
+        q1 += "where q.filename=m.filename and n.filename=i.filename and "
+        q1 += "m.pfw_attempt_id=n.pfw_attempt_id and "
+        q1 += "m.expnum=n.expnum and "
+        q1 += "n.filetype='pixcor_dflat_binned_fp' and "
         q1 += "m.nite>={0} and m.nite<={1} order by m.band".format(
             niterange[0],niterange[1])
-        q2 = "select min(q.expnum),max(q.expnum) from flat_qa q,miscfile m "
-        q2 += "where q.filename=m.filename and "
+        q2 = "select min(q.expnum),max(q.expnum) from flat_qa q,miscfile m, "
+        q2 += "miscfile n, file_archive_info i "
+        q2 += "where q.filename=m.filename and n.filename=i.filename and "
+        q2 += "m.pfw_attempt_id=n.pfw_attempt_id and "
+        q2 += "m.expnum=n.expnum and "
+        q2 += "n.filetype='pixcor_dflat_binned_fp' and "
         q2 += "m.nite>={0} and m.nite<={1} order by m.band".format(
             niterange[0],niterange[1])
         dtype1 = ['a10']
@@ -1135,7 +1143,7 @@ if __name__=='__main__':
     
     #this is the path to the zero-padded DWT tables
     #note that for band is case sensitive
-    pathBinned = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
+    pathBinned = '/work/devel/fpazch/shelf/dwt_dmeyN2/pixcor/'
 
     '''TO SAVE STATISTICS FOR A NITERANGE, ALL AVAILABLE BANDS
     '''
@@ -1145,13 +1153,14 @@ if __name__=='__main__':
         tag = 'y4'
         #-------------------------------
         band_range,expnum_range = Toolbox.band_expnum(nite_range)
-        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/'
+        #savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/'
         print "\nStatistics on niterange: {0}. Year: {1}".format(nite_range,tag) 
         for b in band_range:
             counter = 0
             gc.collect()
             print '\nStarting with band:{0}\t{1}'.format(b,time.ctime())
-            savename = 'qa_' + b + '_' + tag + '.csv'
+            savename = os.path.join(os.path.expanduser('~'),
+                                'Result_box/qa_{0}_{1}.csv'.format(b,tag))
             for (path,dirs,files) in os.walk(pathBinned):
                 for index,item in enumerate(files):   #file is a string
                     expnum = int(item[1:item.find('_')])
@@ -1181,7 +1190,7 @@ if __name__=='__main__':
         tag = 'yn'
         band = 'g'
         print '\n\tStatistics on all available tables, band: {0}'.format(band)
-        savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
+        #savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/' 
         savename = 'qa_' + band + '_' + tag + '.csv'
         filler = 0
         expnum_range = range(606456,606541+1)
@@ -1209,9 +1218,10 @@ if __name__=='__main__':
     '''
     if False:
         #stable period in Y4: sept01 to sept10 570284,572853
-        expnum_range = range(570284,572853+1)
+        expnum_range = range(587208,587218+1)#range(564659,564661+1)
+        #expnum_range = range(606477,606487+1)
         #(606456,606541+1)#(460179,516693)#(606738,606824+1)
-        band = 'g'
+        band = 'r'
         opencount = 0
         for (path,dirs,files) in os.walk(pathBinned):
             for index,item in enumerate(files):   #file is a string
@@ -1224,9 +1234,9 @@ if __name__=='__main__':
                     try:
                         H5tab = OpenH5(pathBinned+item)
                         table = H5tab.h5.root.dwt.dmeyN2
+                        Graph.decomp(table,Nlev=2)
                         Call.wrap1(table,item)
-                        #Graph.decomp(table,Nlev=2)
-                        #Graph.histogram(table,Nlev=2)     
+                        Graph.histogram(table,Nlev=2)     
                         #TimeSerie.count_and_tab(table,Nlev=2)
                     finally:
                         #close open instances
