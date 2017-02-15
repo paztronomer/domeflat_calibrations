@@ -70,6 +70,17 @@ class Toolbox():
         ux = np.sqrt(np.mean(np.square(arr.ravel())) + 
                     np.square(np.mean(arr.ravel()))) 
         return ux
+    
+    @classmethod
+    def median_mask(cls,arr,maskFP=False,baseMask=None):
+        '''calculates the uncertain in a parameter, as usually used in
+        physics
+        '''
+        if maskFP:
+            M = scalMask.Mask.scaling(baseMask,arr)
+            arr = arr[np.where(M)]
+        mm = np.median(arr.ravel()) 
+        return mm
 
     @classmethod
     def corr_random(cls,data):
@@ -404,21 +415,21 @@ class Toolbox():
         '''For a niterange, returns the maximum/minumum in EXPNUM and the 
         BAND for the range
         '''
-        q1 = "select distinct(m.band) from flat_qa q,miscfile m,miscfile n,  "
-        q1 += "file_archive_info i "
-        q1 += "where q.filename=m.filename and n.filename=i.filename and "
-        q1 += "m.pfw_attempt_id=n.pfw_attempt_id and "
-        q1 += "m.expnum=n.expnum and "
-        q1 += "n.filetype='pixcor_dflat_binned_fp' and "
-        q1 += "m.nite>={0} and m.nite<={1} order by m.band".format(
+        q1 = "select distinct(m.band) from flat_qa q,miscfile m,miscfile n,"
+        q1 += " file_archive_info i"
+        q1 += " where q.filename=m.filename and n.filename=i.filename and"
+        q1 += " m.pfw_attempt_id=n.pfw_attempt_id and"
+        q1 += " m.expnum=n.expnum and"
+        q1 += " n.filetype='pixcor_dflat_binned_fp' and"
+        q1 += " m.nite>={0} and m.nite<={1} order by m.band".format(
             niterange[0],niterange[1])
-        q2 = "select min(q.expnum),max(q.expnum) from flat_qa q,miscfile m, "
-        q2 += "miscfile n, file_archive_info i "
-        q2 += "where q.filename=m.filename and n.filename=i.filename and "
-        q2 += "m.pfw_attempt_id=n.pfw_attempt_id and "
-        q2 += "m.expnum=n.expnum and "
-        q2 += "n.filetype='pixcor_dflat_binned_fp' and "
-        q2 += "m.nite>={0} and m.nite<={1} order by m.band".format(
+        q2 = "select min(q.expnum),max(q.expnum) from flat_qa q,miscfile m,"
+        q2 += " miscfile n, file_archive_info i"
+        q2 += " where q.filename=m.filename and n.filename=i.filename and"
+        q2 += " m.pfw_attempt_id=n.pfw_attempt_id and"
+        q2 += " m.expnum=n.expnum and"
+        q2 += " n.filetype='pixcor_dflat_binned_fp' and"
+        q2 += " m.nite>={0} and m.nite<={1} order by m.band".format(
             niterange[0],niterange[1])
         dtype1 = ['a10']
         dtype2 = ['i4','i4']
@@ -485,6 +496,12 @@ class Screen():
                     model = mask_D
                 else:
                     model = mask_A
+                '''=====================MEDIAN NORMALIZ
+                IT MAKES US LOSE THE SHIFTS BETWEEN DIFFERENT EPOCHS
+                SO WE ARE BLID TO THIS INFORMATION. THEN DO NOT NORMALIZE.
+                coeff /= Toolbox.median_mask(coeff,maskFP=True,baseMask=model) 
+                ====================================
+                '''
                 #rms and uncertainty of all coefficients
                 var1 = Toolbox.rms(coeff,maskFP=True,baseMask=model)
                 var2 = Toolbox.uncert(coeff,maskFP=True,baseMask=model)
@@ -1149,7 +1166,7 @@ if __name__=='__main__':
     '''
     if True:
         #remember to change-------------
-        nite_range = [20160813,20170212]
+        nite_range = [20160813,20170218]
         tag = 'y4'
         #-------------------------------
         band_range,expnum_range = Toolbox.band_expnum(nite_range)

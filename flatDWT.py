@@ -196,12 +196,18 @@ class Toolbox():
         basic information to be included in the HDF5 table
         '''
         N1,N2 = niterange
-        query = "select q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,\
-        m.band,m.nite,q.expnum,pfw.reqnum,i.path \
-        from flat_qa q, miscfile m, file_archive_info i, pfw_attempt pfw \
-        where q.filename=m.filename and q.filename=i.filename and \
-        m.nite>={0} and m.nite<={1} and m.pfw_attempt_id=pfw.id and \
-        m.filetype='compare_dflat_binned_fp'".format(N1,N2)
+        query = "select n.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,"
+        query += "m.band,m.nite,q.expnum,pfw.reqnum,i.path "
+        query += "from flat_qa q,miscfile m,miscfile n,file_archive_info i,"
+        query += "pfw_attempt pfw "
+        query += "where q.filename=m.filename "
+        query += "and n.filename=i.filename "
+        query += "and m.nite between {0} and {1} ".format(N1,N2)
+        query += "and m.pfw_attempt_id=pfw.id "
+        query += "and m.filetype='compare_dflat_binned_fp' "
+        query += "and m.pfw_attempt_id=n.pfw_attempt_id "
+        query += "and m.expnum=n.expnum "
+        query += "and n.filetype='pixcor_dflat_binned_fp'"
         datatype = ['a100','f4','f4','f4','i4','a10','i4','i4','i4','a100']
         tab = Toolbox.dbquery(query,datatype)
         return tab
@@ -419,33 +425,32 @@ if __name__=='__main__':
 
     if BINNED:
         #setup samples
-        yXn = [20160813,20170212] 
+        #yXn = [20160813,20170212] 
+        yXn = [20160813,20170218]
+        #yXn = [20150813,20160810]
         label = 'y4'
         print '\n===\t===\n\tStarting with {0}, {1}\n'.format(label.upper(),yXn)
         #run for every group and save as H5 table files
         #columns:  q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,
         #m.band,m.nite,q.expnum,i.path
         dflat_tab = Toolbox.niterange(yXn)
+
         rootpath = '/archive_data/desarchive/'
-        outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
+        outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/pixcor/'
         count = 1
         for k in xrange(dflat_tab.shape[0]):
+            t1 = time.time()
             #basic information to include in HDF5
             binfo = dict(zip(dflat_tab.dtype.names,dflat_tab[k]))
             dirfile = rootpath + dflat_tab['path'][k] + '/'
             bin_fp = FPBinned(dirfile,dflat_tab['filename'][k]).fpBinned
-            t1 = time.time()
             #for stamps the maximum is Nlev=2
             decLev = 2
             c_ml = DWT.multi_level(bin_fp,Nlev=decLev)
-            t2 = time.time()
-            print '\n{2}--{1}, multilevel: {0:.2f}\'\''.format(t2-t1,
-                                                     dflat_tab['filename'][k],
-                                                     count)
             #init table
             fnout = outpath
             fnout += dflat_tab['filename'][k][:
-                            dflat_tab['filename'][k].find('compare')]
+                            dflat_tab['filename'][k].find('pixcor')]
             fnout += label + '.h5'
             Coeff.set_table(fnout,decLev)
             #fill table
@@ -453,7 +458,10 @@ if __name__=='__main__':
             #close table
             Coeff.close_table()    
             count += 1
-
+            t2 = time.time()
+            if not count%10:
+                print '\n{2}--{1},read+multilevel+store: {0:.2f}\'\''.format(
+                    t2-t1,dflat_tab['filename'][k],count)
     if False:
         '''For a single exposure, CCD by CCD
         '''
