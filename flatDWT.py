@@ -197,17 +197,17 @@ class Toolbox():
         '''
         N1,N2 = niterange
         query = "select n.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,"
-        query += "m.band,m.nite,q.expnum,pfw.reqnum,i.path "
-        query += "from flat_qa q,miscfile m,miscfile n,file_archive_info i,"
-        query += "pfw_attempt pfw "
-        query += "where q.filename=m.filename "
-        query += "and n.filename=i.filename "
-        query += "and m.nite between {0} and {1} ".format(N1,N2)
-        query += "and m.pfw_attempt_id=pfw.id "
-        query += "and m.filetype='compare_dflat_binned_fp' "
-        query += "and m.pfw_attempt_id=n.pfw_attempt_id "
-        query += "and m.expnum=n.expnum "
-        query += "and n.filetype='pixcor_dflat_binned_fp'"
+        query += "    m.band,m.nite,q.expnum,pfw.reqnum,i.path"
+        query += " from flat_qa q,miscfile m,miscfile n,file_archive_info i,"
+        query += "    pfw_attempt pfw"
+        query += "    where q.filename=m.filename"
+        query += "    and n.filename=i.filename"
+        query += "    and m.nite between {0} and {1}".format(N1,N2)
+        query += "    and m.pfw_attempt_id=pfw.id"
+        query += "    and m.filetype='compare_dflat_binned_fp'"
+        query += "    and m.pfw_attempt_id=n.pfw_attempt_id"
+        query += "    and m.expnum=n.expnum"
+        query += "    and n.filetype='pixcor_dflat_binned_fp'"
         datatype = ['a100','f4','f4','f4','i4','a10','i4','i4','i4','a100']
         tab = Toolbox.dbquery(query,datatype)
         return tab
@@ -247,7 +247,7 @@ class FPBinned():
         When a position not belongs to focal plane, the value is -1
         Before return it, add 1 to set outer region to zero value
         '''
-        fname = folder+fits
+        fname = os.path.join(folder,fits)
         M_header = fitsio.read_header(fname)
         M_hdu = fitsio.FITS(fname)[0]
         tmp = M_hdu.read()
@@ -426,8 +426,9 @@ if __name__=='__main__':
     if BINNED:
         #setup samples
         #yXn = [20160813,20170212] 
-        yXn = [20160813,20170218]
+        #yXn = [20160813,20170218]
         #yXn = [20150813,20160810]
+        yXn = [20161216,20170223]
         label = 'y4'
         print '\n===\t===\n\tStarting with {0}, {1}\n'.format(label.upper(),yXn)
         #run for every group and save as H5 table files
@@ -435,14 +436,14 @@ if __name__=='__main__':
         #m.band,m.nite,q.expnum,i.path
         dflat_tab = Toolbox.niterange(yXn)
 
-        rootpath = '/archive_data/desarchive/'
+        rootpath = '/archive_data/desarchive'
         outpath = '/work/devel/fpazch/shelf/dwt_dmeyN2/pixcor/'
         count = 1
         for k in xrange(dflat_tab.shape[0]):
             t1 = time.time()
             #basic information to include in HDF5
             binfo = dict(zip(dflat_tab.dtype.names,dflat_tab[k]))
-            dirfile = rootpath + dflat_tab['path'][k] + '/'
+            dirfile = os.path.join(rootpath,dflat_tab['path'][k])
             bin_fp = FPBinned(dirfile,dflat_tab['filename'][k]).fpBinned
             #for stamps the maximum is Nlev=2
             decLev = 2
