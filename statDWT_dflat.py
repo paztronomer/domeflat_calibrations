@@ -508,7 +508,7 @@ class Screen():
                 #get the scaled mask and the peaks within the condition
                 maskN,ptsN = Toolbox.mask_join(
                             coeff,
-                            1.*Toolbox.rms(coeff,maskFP=True,baseMask=model),
+                            3.*Toolbox.rms(coeff,maskFP=True,baseMask=model),
                             baseMask=model)
                 #for clustering, must use coordinates of the mask
                 coo = np.argwhere(ptsN)
@@ -638,8 +638,8 @@ class Graph():
 
         #for level:1 use Horizontal and Vertical mnd Diagonal asks 
         #for level:2 use the Average mask for all the coeffcients
-        thres1 = 1.*Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
-        thres2 = 1.*Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
+        thres1 = 3.*Toolbox.rms(data1,maskFP=True,baseMask=inn_mask)
+        thres2 = 3.*Toolbox.rms(data2,maskFP=True,baseMask=mask_cA)
         mAvg1,pAvg1 = Toolbox.mask_join(data1,thres1,baseMask=inn_mask)
         mAvg2,pAvg2 = Toolbox.mask_join(data2,thres2,baseMask=mask_cA)
         
@@ -1166,12 +1166,14 @@ if __name__=='__main__':
     '''
     if True:
         #remember to change-------------
-        nite_range = [20160813,20170218]
+        nite_range = [20160813,20170223]
         tag = 'y4'
+        #using 3RMS as the threshold!
         #-------------------------------
         band_range,expnum_range = Toolbox.band_expnum(nite_range)
         #savepath = '/work/devel/fpazch/shelf/stat_dmeyN2/'
-        print "\nStatistics on niterange: {0}. Year: {1}".format(nite_range,tag) 
+        print '\nStatistics on niterange: {0}. Year: {1}'.format(nite_range,tag) 
+        print '(note:) Threshold=3*RMS'
         for b in band_range:
             counter = 0
             gc.collect()
