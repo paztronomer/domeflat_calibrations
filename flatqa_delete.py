@@ -1,180 +1,219 @@
-'''Simple script to change status and the delete files from archive
-Remember to source the adequate files before to call it
+'''
+Script to call 2 other scripts in DESDM. One for changing the status of the 
+files and other to delete the files from disk and from DB
+*Remember to source the adequate filetypes before to call it*
 '''
 import os
 import time
 import subprocess
 import numpy as np
 import despydb.desdbi as desdbi
+import shlex
+import logging
 
 class Utility():
-    
     def dbquery(self,reqnum,user_db,help_txt=False):
         '''This method perform 2 queries, on the first selects the triplet plus
         pfw_attempt_id and in the second it performs a larger one on which
         gets all the filetypes availables for each pfw_attempt_id
+        Input:
+        - reqnum
+        - user_db: user as listed in the DB, from which the corresponding 
+        reqnum will be erased
+        Returns:
+        - structured arrays for both queries
         '''
-        #list all tables in the DB
-        q_all = "select distinct OBJECT_NAME from DBA_OBJECTS where \
-                OBJECT_TYPE='TABLE' and OWNER='DES_ADMIN'"
+        ##list all tables in the DB
+        ##q_all = "select distinct OBJECT_NAME"
+        ##q_all += " from DBA_OBJECTS"
+        ##q_all += " where OBJECT_TYPE='TABLE' and OWNER='DES_ADMIN'"
         
         print '\tQuery on req/user: {0}/{1}'.format(reqnum,user_db)
-        #input of triplet plus unique pfw_attempt_id (56 rows)
-        q1 = "select p.unitname,p.attnum,p.reqnum,p.id,p.user_created_by \
-            from pfw_attempt p where p.reqnum={0} and \
-            p.user_created_by='{1}'".format(reqnum,user_db.upper())
         
+        q1 = "select p.unitname,p.attnum,p.reqnum,p.id,p.user_created_by"
+        q1 += " from pfw_attempt p"
+        q1 += " where p.reqnum={0}".format(reqnum) 
+        q1 += " and p.user_created_by='{0}'".format(user_db.upper())
         desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
         section = 'db-desoper'
         dbi = desdbi.DesDbi(desfile,section)
         if help_txt:
             help(dbi)
-        
         cursor1 = dbi.cursor()
         cursor1.execute(q1)
-        #time.sleep(3)
         key = [item[0].lower() for item in cursor1.description]
         rows = cursor1.fetchall()
-        print '\tN={0}'.format(len(rows))
-        data1 = np.rec.array(rows,dtype=[(key[0],'i4'),(key[1],'i4'),
-                            (key[2],'i4'),(key[3],'i4'),(key[4],'a25')])
+        data1 = np.rec.array(rows,dtype=[(key[0],'|S25'),(key[1],'i4'),
+                            (key[2],'i4'),(key[3],'i4'),(key[4],'|S25')])
+        print '\t# PFW_IDs={0}'.format(len(rows))
         
-        if ( len(np.unique(data1['user_created_by']))==1 and 
-            np.unique(data1['user_created_by'])[0].lower()==user_db ):
-            pass
-        else:
-            aux = 'ERROR: not unique user: {0}'.format(np.unique(
-                                                    data1['user_created_by']))
-            raise ValueError(aux)
-
-        #a loop is faster than make an unique query
         aux_fill = []
-        for i in xrange(data1.shape[0]):
-            pfw_id = data1.id[i] #or data1['id'][i]
-            q2 = 'select distinct(d.filetype),d.pfw_attempt_id from desfile d \
-                where d.pfw_attempt_id={0}'.format(pfw_id)
+        pfw_id = np.unique(data1['id'][:]) #or data1.id[i]
+        for idx,pfw in enumerate(pfw_id):
+            q2 = "select distinct(d.filetype), d.pfw_attempt_id"
+            q2 += " from desfile d,file_archive_info i"
+            q2 += " where d.pfw_attempt_id={0}".format(pfw)
+            q2 += " and d.filename=i.filename"
+            q2 += " order by d.pfw_attempt_id"
             cursor2 = dbi.cursor()
             cursor2.execute(q2)
             kw = [item[0].lower() for item in cursor2.description]
             rows2 = cursor2.fetchall()
-            print '\tworking on pfw_attempt_id:{0} (N={1}, {2} of {3})'.format(
-                                    pfw_id,len(rows2),i+1,data1.shape[0])
-            if False: Utility.check_files(pfw_id,ft)
-            for i in rows2: 
-                #picks every tuple inside the list
-                aux_fill.append(i)
+            aux = '\tworking on pfw_attempt_id:'
+            aux += '{0} (number of filetypes={1}, {2} of {3} IDs)'.format(
+                pfw,len(rows2),idx+1,pfw_id.shape[0])
+            for rr in rows2: 
+                aux_fill.append(rr)
         data2 = np.rec.array(aux_fill,dtype=[(kw[0],'a50'),(kw[1],'i4')])
-        print 'N_q1/N_q2 = {0}/{1}'.format(data1.shape[0],data2.shape[0])
+        print '#PFW_IDs / #TOTAL_FILETYPES = {0} / {1}'.format(data1.shape[0],
+                                                            data2.shape[0])
         return data1,data2
-    
 
+    
     def data_status(self,unitname,reqnum,attnum,db='db-desoper',
                     mark='JUNK',modify=False):
+        '''Method to call Michael's script to change the status of the files.
+        Only files marked as JUNK can be deleted.
+        Inputs:
+        - unitname,reqnum,attnum: triplet
+        - db
+        - mark: 'JUNK' by default
+        - modify: tell the script to really mark as JUNK or only display
+        current status
+        '''
         print '\n----------\n'
         print '\n\tChanging status for unit/req/att: {0}/{1}/{2}'.format(
-                                                                unitname,
-                                                                reqnum,attnum)
+            unitname,reqnum,attnum)
         try:
             if modify:
-                cmd = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4} --dbupdate'.format(unitname,
-                                                                    reqnum,
-                                                                    attnum,
-                                                                    db,mark)
+                cmd = "datastate.py --unitname {0}".format(unitname)
+                cmd += " --reqnum {0}".format(reqnum)
+                cmd += " --attnum {0}".format(attnum)
+                cmd += " --section {0}".format(db)
+                cmd += " --newstate {0}".format(mark)
+                cmd += " --dbupdate"
             else:
-                cmd = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4}'.format(unitname,reqnum,attnum,
-                                                        db,mark)
-            ask = subprocess.Popen(cmd.split(),stdout=subprocess.PIPE)
+                cmd = "datastate.py --unitname {0}".format(unitname)
+                cmd += " --reqnum {0}".format(reqnum)
+                cmd += " --attnum {0}".format(attnum)
+                cmd += " --section {0}".format(db)
+                cmd += " --newstate {0}".format(mark)
+            cmd = shlex.split(cmd)
+            ask = subprocess.Popen(cmd,stdout=subprocess.PIPE)
             output,error = ask.communicate()
             ask.wait()
-            
-            #INFO
-            aux_info = 'datastate.py --unitname {0} --reqnum {1} --attnum {2} \
-                    --section {3} --newstate {4}'.format(unitname,reqnum,attnum,
-                                                        db,mark)
-            outMsg,errMsg = subprocess.Popen(aux_info.split(),
-                                        stdout=subprocess.PIPE).communicate()
-            print '\n',outMsg[outMsg.find('Current'):]
-        
+            print '\n',output[output.find('Current'):]
         except:
             aux = 'Error in calling datastate.py \
                 with {0} / {1} / {2}'.format(unitname,reqnum,attnum)
-            raise ValueError(aux)
-
-
+            logging.error(aux)
+        return True
+    
+    
     def delete_junk(self,unitname,reqnum,attnum,filetype,pfw_attempt_id,
-                archive='desar2home',
-                exclusion=['compare_dflat_binned_fp'],
-                del_opt='yes'):
-        '''To keep xtalked files: 
-        exclusion=['compare_dflat_binned_fp','xtalked_dflat'],
-        Different options for del_opt: yes/no/diff/print
-        setup -v firstcut Y4N+2
+                    archive='desar2home',exclusion=None,del_opt='yes'):
+        ''' 
+        This method calls Doug's script, which deletes selected files,
+        previously marked as JUNK. When number of files in DB differs from
+        those in disk or if there was a problem in the deletion,
+        saves the filetype and pfw_attempt_id on a list
+        Inputs:
+        - unitname,reqnum,attnum: triplet
+        - filetype to be processed
+        - pfw_attempt_id: redundant qwith the triplet
+        - archive
+        - exclusion: list of filetypes to be excluded from deletion
+        - del_opt: asnwer to the script, options are yes/no/diff/print
+        Returns:
+        - list of filetypes and pfw_attempt_ids which causes problems in 
+        deleting or has different number of entries in disk and in DB
         '''
-        checkThis = []
         print '========DEL unit/req/att/filetype : {0}/{1}/{2}/{3}\n'.format(
-                                                                    unitname,
-                                                                    reqnum,
-                                                                    attnum,
-                                                                    filetype)
-        if filetype not in exclusion:
-            cmd = 'delete_files.py --section=db-desoper --filetype={1} \
-                --unitname={2} --reqnum={3} --attnum={4} --archive={0}'.format(
-                                                                archive,
-                                                                filetype,
-                                                                unitname,
-                                                                reqnum,attnum) 
+            unitname,reqnum,attnum,filetype)
+
+        checkThis = []
+        cmd = "delete_files.py --section=db-desoper"
+        cmd += " --filetype={0}".format(filetype)
+        cmd += " --unitname={0} --reqnum={1} --attnum={2}".format(
+            unitname,reqnum,attnum)
+        cmd += " --archive={0}".format(archive)
+        cmd = shlex.split(cmd)
+        if exclusion is None:
             try:
-                #p = subprocess.Popen(cmd.split(),stdin=subprocess.PIPE)
-                p = subprocess.Popen(cmd.split(),shell=False,
+                pB = subprocess.Popen(cmd,shell=False,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE) 
-                outM,errM = p.communicate()#(input=del_opt)
-                #check if same amount of files on DB and DISK
+                                    stderr=subprocess.PIPE,
+                                    universal_newlines=True)
+                outM,errM = pB.communicate(input=del_opt)
+                pB.wait()
                 tmp = outM.replace('=','').replace('\n',' ').split()
-                Ndisk = np.int(tmp[[i+1 for i,x in enumerate(tmp) 
-                                    if (x=='disk' and tmp[i-1]=='from')][0]]) 
-                Ndb = np.int(tmp[[i+1 for i,x in enumerate(tmp) 
-                                    if (x=='db' and tmp[i-1]=='from')][0]])
-                
+                Ndisk = tmp[[i+1 for i,x in enumerate(tmp) 
+                        if (x=='disk' and tmp[i-1]=='from')][0]]
+                Ndb = tmp[[i+1 for i,x in enumerate(tmp) 
+                        if (x=='db' and tmp[i-1]=='from')][0]]
+                Ndisk,Ndb = np.int(Ndisk),np.int(Ndb)
                 if ((Ndb != Ndisk) or ('No files on disk' in outM)):
                     print (filetype,pfw_attempt_id,'db and disk differs')
                     checkThis.append((filetype,pfw_attempt_id,
                                     'db and disk differs'))
-                    p = subprocess.Popen(cmd.split(),shell=False,
-                                        stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-                    p.communicate(input=del_opt)
-                else:
-                    p = subprocess.Popen(cmd.split(),shell=False,
-                                        stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-                    p.communicate(input=del_opt)
-                #p.communicate(input=del_opt)
-                #p.wait()
             except:
                 print (filetype,pfw_attempt_id,'not found')
-                checkThis.append((filetype,pfw_attempt_id,'not found'))
+                checkThis.append((filetype,pfw_attempt_id,
+                                'problem deleting this filetype'))
+            
         else:
-            print 'Filetype not allowed to be erased: {0}'.format(filetype)
+            if filetype not in exclusion:
+                try:
+                    pC = subprocess.Popen(cmd,shell=False,
+                                        stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        universal_newlines=True)
+                    outM,errM = pC.communicate(input=del_opt)
+                    pC.wait()
+                    tmp = outM.replace('=','').replace('\n',' ').split()
+                    Ndisk = tmp[[i+1 for i,x in enumerate(tmp) 
+                            if (x=='disk' and tmp[i-1]=='from')][0]]
+                    Ndb = tmp[[i+1 for i,x in enumerate(tmp) 
+                            if (x=='db' and tmp[i-1]=='from')][0]]
+                    Ndisk,Ndb = np.int(Ndisk),np.int(Ndb)
+                    if ((Ndb != Ndisk) or ('No files on disk' in outM)):
+                        print (filetype,pfw_attempt_id,'db and disk differs')
+                        checkThis.append((filetype,pfw_attempt_id,
+                                        'db and disk differs'))
+                except:
+                    print (filetype,pfw_attempt_id,'not found')
+                    checkThis.append((filetype,pfw_attempt_id,
+                                    'problem deleting this filetype'))
+            else:
+                print 'Filetype not allowed to be erased: {0}'.format(filetype)
         return checkThis
-
-    def do_job(self,reqnum,usernm):
-        #auxOut = Utility().delete_junk(20160808,2625,1,'xtalked_bias',579388)
+    
+    
+    def do_job(self,reqnum,usernm,keep=None,remove=True):
+        '''Wrapper to call the change status and deletion
+        Inputs:
+        - reqnum
+        - usernm: string for the username, as listed in DB
+        - keep: list of filetypes to be kept (not deleted)
+        - remove: to remove or not the files
+        '''
         arr1,arr2 = Utility().dbquery(reqnum,usernm)
         auxOut = []
+        #iterate over pfw_attempt_ids
         for r in xrange(arr1.shape[0]):
             att,req = arr1['attnum'][r],arr1['reqnum'][r]
             unit,pfw_id = arr1['unitname'][r],arr1['id'][r]
-            Utility().data_status(unit,req,att)
-            ftype = arr2['filetype'][np.where(arr2['pfw_attempt_id']==pfw_id)]
+            Utility().data_status(unit,req,att,modify=remove)
+            #iterate over filetypes for the above pfw_attempt_id
+            ftype = arr2[np.where(arr2['pfw_attempt_id']==pfw_id)]['filetype']
+            ftype = np.unique(ftype)
             for ft in ftype:
                 try:
-                    auxOut += Utility().delete_junk(unit,req,att,ft,pfw_id)
+                    #call the deletion
+                    auxOut += Utility().delete_junk(unit,req,att,ft,pfw_id,
+                                                exclusion=keep)
                 except:
                     print '\n\tFailure on deleting {0}/{1}/{2}/{3}'.format(unit,
                                                                     req,att,ft)
@@ -183,14 +222,25 @@ class Utility():
             datacheck = np.rec.array(auxOut,dtype=[('filetype','a50'),
                                                 ('pfw_attempt_id','i4'),
                                                 ('flag','a80')])
-            np.savetxt('/home/fpazch/Code_deslogin/checkData_flatDEL.csv',
-                    datacheck,delimiter=',',fmt='%s,%d,%s',
+            tmp = 'checkPixcor_flatDEL_r'+str(reqnum)+'.csv'
+            auxname = os.path.join(os.path.expanduser('~'),
+                                'Result_box/logs_flatDelete',tmp)
+            np.savetxt(auxname,datacheck,delimiter=',',fmt='%|S50,%d,%|S100',
                     header='filetype,pfw_attempt_id,flag')
+        return True
 
 
 if __name__=='__main__':
     print '\n**********\nRemember to submit from DESSUB or DESAR2\n**********'
     toCall = Utility()
-    toCall.do_job(2625,'fpazch')
+    #reqnum_delete = [2777,2769,2776,2756,2748,2751,2743,2744]
+    #reqnum_delete = [2782,2783,2807,2808]
+    reqnum_delete = [2915,2916,2917]
+    keepFiles = ['pixcor_dflat_binned_fp']
+    for req in reqnum_delete:
+        print '\n\n========================\n\tREQNUM={0}'.format(req)
+        print '\t{0}\n========================'.format(time.ctime())
+        toCall.do_job(req,'fpazch') #keepfiles
 
+    print time.ctime()
     print '\n (THE END)'  
