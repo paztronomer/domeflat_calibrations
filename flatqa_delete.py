@@ -235,7 +235,8 @@ if __name__=='__main__':
     toCall = Utility()
     #reqnum_delete = [2777,2769,2776,2756,2748,2751,2743,2744]
     #reqnum_delete = [2782,2783,2807,2808]
-    reqnum_delete = [2915,2916,2917]
+    #reqnum_delete = [2915,2916,2917]
+    reqnum_delete = [2808,2807]
     keepFiles = ['pixcor_dflat_binned_fp']
     for req in reqnum_delete:
         print '\n\n========================\n\tREQNUM={0}'.format(req)
