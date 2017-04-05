@@ -225,7 +225,7 @@ class Utility():
             tmp = 'checkPixcor_flatDEL_r'+str(reqnum)+'.csv'
             auxname = os.path.join(os.path.expanduser('~'),
                                 'Result_box/logs_flatDelete',tmp)
-            np.savetxt(auxname,datacheck,delimiter=',',fmt='%|S50,%d,%|S100',
+            np.savetxt(auxname,datacheck,delimiter=',',fmt='%-s50,%d,%-s100',
                     header='filetype,pfw_attempt_id,flag')
         return True
 
