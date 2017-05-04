@@ -38,48 +38,36 @@ class Mask():
             np.save(fn_mask,tmp_mask)
         return tmp_mask
 
-    @classmethod 
+    @classmethod
     def scaling(cls,base,target):
         '''Receives a base mask and emulates its shape on the
-        target array, using geometric scaling and nearest neighbor 
+        target array, using geometric scaling and nearest neighbor
         interpolation
         '''
-        #options: 
-        # scipy.interpolate.interpn  
+        #options:
+        # scipy.interpolate.interpn
         # scipy.interpolate.RegularGridInterpolator
         # scipy.interpolate.NearestNDInterpolator
-        
+
         #coordiantes of the base mask
-<<<<<<< HEAD
-        x,y = np.arange(0,base.shape[1]),np.arange(base.shape[0])
-=======
         x,y = np.arange(0,base.shape[1]),np.arange(0,base.shape[0])
->>>>>>> dflat
         #defines an interpolator object
         intObj = scipy.interpolate.RegularGridInterpolator((y,x),
                                                         base.astype(int))
         #principle: identity matrix scaling with different scale for x and y
-<<<<<<< HEAD
-        ratio0 = base.shape[0]/np.float(target.shape[0])
-        ratio1 = base.shape[1]/np.float(target.shape[1])
-=======
         #is important to use the value of shape-1, otherwise the maximum
         #value are outside the base/target scaling dimensions
         ratio0 = (base.shape[0]-1.)/np.float(target.shape[0]-1.)
         ratio1 = (base.shape[1]-1.)/np.float(target.shape[1]-1.)
->>>>>>> dflat
-        #by multiplying indice by this ratios, will get the equivalent in 
+        #by multiplying indice by this ratios, will get the equivalent in
         #the base mask dimension
         xaux,yaux = np.arange(0,target.shape[1]),np.arange(0,target.shape[0])
         xaux,yaux = ratio1*xaux,ratio0*yaux
-<<<<<<< HEAD
-=======
-        #at this point, just as double check, see if the maximum value is 
+        #at this point, just as double check, see if the maximum value is
         #out of bounds
-        if max(xaux) > (base.shape[1]-1.): xaux[-1] = (base.shape[1]-1.)
-        if max(yaux) > (base.shape[0]-1.): yaux[-1] = (base.shape[0]-1.)
+        if (max(xaux) - (base.shape[1]-1.)) > 1: xaux[-1] = (base.shape[1]-1.)
+        if (max(yaux) - (base.shape[0]-1.)) > 1: yaux[-1] = (base.shape[0]-1.)
         #construct the grid for interpolation
->>>>>>> dflat
         xaux,yaux = np.meshgrid(xaux,yaux)
         cooaux = np.array(zip(yaux.ravel(),xaux.ravel()))
         #use nearest neighbor to find values
@@ -92,16 +80,13 @@ class Mask():
             ax1.imshow(base,cmap=plt.get_cmap('summer'),origin='lower')
             ax2.imshow(Maux,cmap=plt.get_cmap('summer'),origin='lower')
             plt.show()
-<<<<<<< HEAD
-        return Maux
-=======
         #clean the interpolator
         intObj = None
         return Maux
-    
+
     @classmethod
     def cAHV_mask(cls,h5table,savemask=False):
-        '''Method to construct a mask and save it. Once the mask is saved as 
+        '''Method to construct a mask and save it. Once the mask is saved as
         a numpy file, this method can be safely erased
         '''
         cA = [row['c_A'] for row in h5table.iterrows()]
@@ -111,7 +96,7 @@ class Mask():
         ca_fakeH = np.zeros(cA_model.shape,dtype=np.bool)
         ca_fakeV = np.zeros(cA_model.shape,dtype=np.bool)
         ca_fakeD = np.zeros(cA_model.shape,dtype=np.bool)
-        #analyze this coordinates 
+        #analyze this coordinates
         aux = [[30,86],[30,54],[38,46],[46,38],[62,30]]
         #[x0,y0,x1,y1]
         aux_H = [[67,117,70,118],
@@ -201,7 +186,6 @@ class Mask():
             np.save('cV_mask.npy',ca_fakeV)
             np.save('cD_mask.npy',ca_fakeD)
         return False
->>>>>>> dflat
 
 
 class Call():
@@ -224,11 +208,7 @@ if __name__ == '__main__':
     mbool = Mask.aux_binned_npy()
 
     #opening H5 tables from DWT
-<<<<<<< HEAD
-    fold = '/work/devel/fpazch/shelf/dwt_Y4Binned/'
-=======
     fold = '/work/devel/fpazch/shelf/dwt_dmeyN2/'
->>>>>>> dflat
     for (path,dirs,files) in os.walk(fold):
         for ind,item in enumerate(files):
             if '.h5' in item:
@@ -237,10 +217,7 @@ if __name__ == '__main__':
                 try:
                     H5tab = statDWT.OpenH5(fold+item)
                     table = H5tab.h5.root.coeff.FP
-<<<<<<< HEAD
-=======
                     Mask.cAHV_mask(table)
->>>>>>> dflat
                     Call.call1(mbool,table)
                 finally:
                     H5tab.closetab()
