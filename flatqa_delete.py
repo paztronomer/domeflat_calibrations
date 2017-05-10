@@ -64,10 +64,13 @@ class Utility():
                 pfw,len(rows2),idx+1,pfw_id.shape[0])
             for rr in rows2: 
                 aux_fill.append(rr)
-        data2 = np.rec.array(aux_fill,dtype=[(kw[0],'a50'),(kw[1],'i4')])
-        print '#PFW_IDs / #TOTAL_FILETYPES = {0} / {1}'.format(data1.shape[0],
-                                                            data2.shape[0])
-        return data1,data2
+        if len(aux_fill) > 0:
+            data2 = np.rec.array(aux_fill,dtype=[(kw[0],'a50'),(kw[1],'i4')])
+            print '#PFW_IDs / #TOTAL_FILETYPES = {0} / {1}'.format(
+                data1.shape[0],data2.shape[0])
+            return data1,data2
+        else:
+            return None
 
     
     def data_status(self,unitname,reqnum,attnum,db='db-desoper',
@@ -199,34 +202,41 @@ class Utility():
         - keep: list of filetypes to be kept (not deleted)
         - remove: to remove or not the files
         '''
-        arr1,arr2 = Utility().dbquery(reqnum,usernm)
-        auxOut = []
-        #iterate over pfw_attempt_ids
-        for r in xrange(arr1.shape[0]):
-            att,req = arr1['attnum'][r],arr1['reqnum'][r]
-            unit,pfw_id = arr1['unitname'][r],arr1['id'][r]
-            Utility().data_status(unit,req,att,modify=remove)
-            #iterate over filetypes for the above pfw_attempt_id
-            ftype = arr2[np.where(arr2['pfw_attempt_id']==pfw_id)]['filetype']
-            ftype = np.unique(ftype)
-            for ft in ftype:
-                try:
-                    #call the deletion
-                    auxOut += Utility().delete_junk(unit,req,att,ft,pfw_id,
-                                                exclusion=keep)
-                except:
-                    print '\n\tFailure on deleting {0}/{1}/{2}/{3}'.format(unit,
-                                                                    req,att,ft)
-        print '\n\nCheck the below Filetypes/PFW_ID/Flags:\n{0}'.format(auxOut)
-        if len(auxOut) > 0:
-            datacheck = np.rec.array(auxOut,dtype=[('filetype','a50'),
-                                                ('pfw_attempt_id','i4'),
-                                                ('flag','a80')])
-            tmp = 'checkPixcor_flatDEL_r'+str(reqnum)+'.csv'
-            auxname = os.path.join(os.path.expanduser('~'),
-                                'Result_box/logs_flatDelete',tmp)
-            np.savetxt(auxname,datacheck,delimiter=',',fmt='%-s50,%d,%-s100',
-                    header='filetype,pfw_attempt_id,flag')
+        resquery = Utility().dbquery(reqnum,usernm)
+        if resquery is None:
+            print '\n\t(WARNING) Reqnum {0} has no DB entries\n'.format(reqnum)
+        else:
+            arr1,arr2 = resquery
+            auxOut = []
+            #iterate over pfw_attempt_ids
+            for r in xrange(arr1.shape[0]):
+                att,req = arr1['attnum'][r],arr1['reqnum'][r]
+                unit,pfw_id = arr1['unitname'][r],arr1['id'][r]
+                Utility().data_status(unit,req,att,modify=remove)
+                #iterate over filetypes for the above pfw_attempt_id
+                ftype = arr2[np.where(arr2['pfw_attempt_id']==pfw_id)]
+                ftype = ftype['filetype']
+                ftype = np.unique(ftype)
+                for ft in ftype:
+                    try:
+                        #call the deletion
+                        auxOut += Utility().delete_junk(unit,req,att,ft,pfw_id,
+                                                    exclusion=keep)
+                    except:
+                        print '\n\tFailure on deleting {0}/{1}/{2}/{3}'.format(
+                            unit,req,att,ft)
+            print '\n\nCheck the below Filetypes/PFW_ID/Flags:\n{0}'.format(
+                auxOut)
+            if len(auxOut) > 0:
+                datacheck = np.rec.array(auxOut,dtype=[('filetype','a50'),
+                                                    ('pfw_attempt_id','i4'),
+                                                    ('flag','a80')])
+                tmp = 'checkPixcor_flatDEL_r'+str(reqnum)+'.csv'
+                auxname = os.path.join(os.path.expanduser('~'),
+                                    'Result_box/logs_flatDelete',tmp)
+                np.savetxt(auxname,datacheck,delimiter=',',
+                        fmt='%-s50,%d,%-s100',
+                        header='filetype,pfw_attempt_id,flag')
         return True
 
 
@@ -236,8 +246,9 @@ if __name__=='__main__':
     #reqnum_delete = [2777,2769,2776,2756,2748,2751,2743,2744]
     #reqnum_delete = [2782,2783,2807,2808]
     #reqnum_delete = [2915,2916,2917]
-    reqnum_delete = [2808,2807]
-    keepFiles = ['pixcor_dflat_binned_fp']
+    #reqnum_delete = [2808,2807]
+    reqnum_delete = np.loadtxt("DeleteReqnum_20170510.csv",dtype="int")
+    #keepFiles = ['pixcor_dflat_binned_fp']
     for req in reqnum_delete:
         print '\n\n========================\n\tREQNUM={0}'.format(req)
         print '\t{0}\n========================'.format(time.ctime())
