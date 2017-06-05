@@ -329,6 +329,9 @@ class Caller(Coeff):
         d["wavelet"] = wvmother
         d["time"] = time.ctime()
         Coeff.fill_table(res,info_table=d)
+        """HERE: I need to add basic exposure information like: filter, expnum,
+        pfw_attempt_id, nite
+        """
         #close the file
         Coeff.close_table()
         t1 = time.time()
