@@ -330,7 +330,8 @@ class Caller(Coeff):
         d["time"] = time.ctime()
         Coeff.fill_table(res,info_table=d)
         """HERE: I need to add basic exposure information like: filter, expnum,
-        pfw_attempt_id, nite
+        pfw_attempt_id, nite. The attribute is accesible by:
+        <H5table object>.attrs.DB_INFO
         """
         #close the file
         Coeff.close_table()
