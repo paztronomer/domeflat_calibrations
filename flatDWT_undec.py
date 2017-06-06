@@ -29,6 +29,41 @@ import tables
 
 class Toolbox():
     @classmethod
+    def dbquery(cls,toquery,outdtype,dbsection='db-desoper',help_txt=False):
+        """the personal setup file .desservices.ini must be pointed by desfile
+        DB section by default will be desoper
+        """
+        import despydb.desdbi as desdbi
+        desfile = os.path.join(os.getenv("HOME"),".desservices.ini")
+        section = dbsection
+        dbi = desdbi.DesDbi(desfile,section)
+        if help_txt: help(dbi)
+        cursor = dbi.cursor()
+        cursor.execute(toquery)
+        cols = [line[0].lower() for line in cursor.description]
+        rows = cursor.fetchall()
+        outtab = np.rec.array(rows,dtype=zip(cols,outdtype))
+        return outtab
+
+    @classmethod
+    def q_one(cls,fnm_compare):
+        q = "select factor,rms,worst"
+        q +=" from flat_qa"
+        q += " where filename='{0}'".format(fnm_compare)
+        datatype = ["f4","f4","f4"]
+        tab1 = Toolbox.dbquery(q,datatype)
+        return tab1
+
+    @classmethod
+    def q_two(cls,fnm_any):
+        q = "select band,nite,expnum,pfw_attempt_id"
+        q += " from miscfile"
+        q += " where filename='{0}'".format(fnm_any)
+        dt = ["a10","i4","i4","i4"]
+        tab2 = Toolbox.dbquery(q,dt)
+        return tab2
+
+    @classmethod
     def range_str(cls,head_rng):
         head_rng = head_rng.strip("[").strip("]").replace(":",",").split(",")
         return map(lambda x: int(x)-1, head_rng)
@@ -81,45 +116,6 @@ class Toolbox():
             np.percentile(arr_like,.75))
         return False
 
-    """
-    @classmethod
-    def dbquery(cls,toquery,outdtype,dbsection="db-desoper",help_txt=False):
-        #the personal setup file .desservices.ini must be pointed by desfile
-        #DB section by default will be desoper
-        import despydb.desdbi as desdbi
-        desfile = os.path.join(os.getenv("HOME"),".desservices.ini")
-        section = dbsection
-        dbi = desdbi.DesDbi(desfile,section)
-        if help_txt: help(dbi)
-        cursor = dbi.cursor()
-        cursor.execute(toquery)
-        cols = [line[0].lower() for line in cursor.description]
-        rows = cursor.fetchall()
-        outtab = np.rec.array(rows,dtype=zip(cols,outdtype))
-        return outtab
-
-    @classmethod
-    def niterange(cls,niterange=None,ftype=None):
-        #Method to ask the DB for some relevant information to run
-        #this script over a range of nights. This method also query for
-        #basic information to be included in the HDF5 table
-        N1,N2 = niterange
-        query = "select n.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,"
-        query += "    m.band,m.nite,q.expnum,pfw.reqnum,i.path"
-        query += " from flat_qa q,miscfile m,miscfile n,file_archive_info i,"
-        query += "    pfw_attempt pfw"
-        query += "    where q.filename=m.filename"
-        query += "    and n.filename=i.filename"
-        query += "    and m.nite between {0} and {1}".format(N1,N2)
-        query += "    and m.pfw_attempt_id=pfw.id"
-        query += "    and m.filetype='compare_dflat_binned_fp'"
-        query += "    and m.pfw_attempt_id=n.pfw_attempt_id"
-        query += "    and m.expnum=n.expnum"
-        query += "    and n.filetype='pixcor_dflat_binned_fp'"
-        datatype = ["a100","f4","f4","f4","i4","a10","i4","i4","i4","a100"]
-        tab = Toolbox.dbquery(query,datatype)
-        return tab
-    """
 
 class FPBinned():
     def __init__(self,fpath):
@@ -324,15 +320,30 @@ class Caller(Coeff):
                     table_name=wvmother,
                     title="DWT type: {0}".format(wvmother))
         #fill the table
-        d = dict()
-        d["module"] = "PyWavelets v{0}".format(pywt.__version__)
-        d["wavelet"] = wvmother
-        d["time"] = time.ctime()
-        Coeff.fill_table(res,info_table=d)
         """HERE: I need to add basic exposure information like: filter, expnum,
         pfw_attempt_id, nite. The attribute is accesible by:
         <H5table object>.attrs.DB_INFO
         """
+        d = dict()
+        d["module"] = "PyWavelets v{0}".format(pywt.__version__)
+        d["wavelet"] = wvmother
+        d["time"] = time.ctime()
+        ###patch code: use it as base for final version
+        c1 = npyfile.find("pixcor-dflat-binned-fp")
+        if c1 >= 0:
+            tmp1 = Toolbox.q_one(npyfile.replace("pixcor","compare"))
+        else:
+            tmp1 = Toolbox.q_one(npyfile)
+        tmp2 = Toolbox.q_two(npyfile)
+        d["factor"] = tmp1["factor"][0]
+        d["rms"] = tmp1["rms"][0]
+        d["worst"] = tmp1["worst"][0]
+        d["band"] = tmp2["band"][0]
+        d["nite"] = tmp2["nite"][0]
+        d["expnum"] = tmp2["expnum"][0]
+        d["pfw_attempt_id"] = tmp2["pfw_attempt_id"][0]
+        ###patch code
+        Coeff.fill_table(res,info_table=d)
         #close the file
         Coeff.close_table()
         t1 = time.time()
