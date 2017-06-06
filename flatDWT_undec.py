@@ -310,7 +310,7 @@ class Caller(Coeff):
         #check if the folder exists, if not, create it
         Toolbox.check_folder(out_folder)
         #setup the output name
-        out_name = "{0}_{1}.h5".format(wvmother,npyfile[:npyfile.find(".npy")])
+        out_name = "{0}_{1}.h5".format(wvmother,npyfile[:npyfile.find(".fits")])
         out_name = os.path.join(out_folder,out_name)
         #perform the DWT
         res = DWT.undec_mlevel(bin_fp,wvfunction=wvmother,lev_end=declevel)
