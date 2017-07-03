@@ -187,7 +187,7 @@ class Utility():
                 auxname = os.path.join(os.path.expanduser("~"),
                                     "Result_box/logs_flatDelete",tmp)
                 np.savetxt(auxname,datacheck,delimiter=",",
-                        fmt="%-s50,%d,%-s100",
+                        fmt="%d,%-s100",
                         header="reqnum,flag")
         return True
 
