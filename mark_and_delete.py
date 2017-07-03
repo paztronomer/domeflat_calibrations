@@ -24,7 +24,7 @@ class Utility():
         ##q_all += " from DBA_OBJECTS"
         ##q_all += " where OBJECT_TYPE="TABLE" and OWNER="DES_ADMIN""
         if (reqnum is None) or (user_db is None) or (attnum is None):
-            print "No enoghn data for query"
+            print "Not enough data for query"
             exit(1)
         
         if (attnum == "all"):
@@ -194,11 +194,15 @@ class Utility():
 if __name__ == "__main__":
     """for deletion, must run in desar2... warning!!!
     """
-    reqnum_list = [2907,2908,2920]
+    #Add argparse
+    #
+    print "Starting!"
+    reqnum_list = [2877]
+    #[2907,2908,2920]
     #[2863,2864,2865,2866,2867,2868,2869,2870,2871,2872,2873,2874,2875]
     #[2623,2625,2743,2748,2751,2756,2769,2776,2777,2782,2783,2807,2808]
-    for rq in [2877]:#reqnum_list:
-        kw = {"user_db":"fpazch","attnum":"all","mark_junk":True}
-        kw["delete"] = False
+    for rq in reqnum_list:
+        kw = {"user_db":"fpazch","attnum":[1,2,3,4],"mark_junk":True}
+        kw["delete"] = True
         kw["reqnum"] = rq
         Utility().caller1(**kw)
