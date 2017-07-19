@@ -1,5 +1,5 @@
 '''
-Script to call 2 other scripts in DESDM. One for changing the status of the
+Script to call 2 other scripts in DESDM. One for changing the status of the 
 files and other to delete the files from disk and from DB
 *Remember to source the adequate filetypes before to call it*
 '''
@@ -18,7 +18,7 @@ class Utility():
         gets all the filetypes availables for each pfw_attempt_id
         Input:
         - reqnum
-        - user_db: user as listed in the DB, from which the corresponding
+        - user_db: user as listed in the DB, from which the corresponding 
         reqnum will be erased
         Returns:
         - structured arrays for both queries
@@ -27,16 +27,13 @@ class Utility():
         ##q_all = "select distinct OBJECT_NAME"
         ##q_all += " from DBA_OBJECTS"
         ##q_all += " where OBJECT_TYPE='TABLE' and OWNER='DES_ADMIN'"
-
+        
         print '\tQuery on req/user: {0}/{1}'.format(reqnum,user_db)
-
+        
         q1 = "select p.unitname,p.attnum,p.reqnum,p.id,p.user_created_by"
-        q1 += " from pfw_attempt p,file_archive_info fai,desfile d"
-        q1 += " where p.reqnum={0}".format(reqnum)
+        q1 += " from pfw_attempt p"
+        q1 += " where p.reqnum={0}".format(reqnum) 
         q1 += " and p.user_created_by='{0}'".format(user_db.upper())
-        q1 += " and d.pfw_attempt_id=p.id"
-        q1 += " and d.filename=fai.filename"
-        q1 += " order by p.id"
         desfile = os.path.join(os.getenv('HOME'),'.desservices.ini')
         section = 'db-desoper'
         dbi = desdbi.DesDbi(desfile,section)
@@ -49,7 +46,7 @@ class Utility():
         data1 = np.rec.array(rows,dtype=[(key[0],'|S25'),(key[1],'i4'),
                             (key[2],'i4'),(key[3],'i4'),(key[4],'|S25')])
         print '\t# PFW_IDs={0}'.format(len(rows))
-
+        
         aux_fill = []
         pfw_id = np.unique(data1['id'][:]) #or data1.id[i]
         for idx,pfw in enumerate(pfw_id):
@@ -65,7 +62,7 @@ class Utility():
             aux = '\tworking on pfw_attempt_id:'
             aux += '{0} (number of filetypes={1}, {2} of {3} IDs)'.format(
                 pfw,len(rows2),idx+1,pfw_id.shape[0])
-            for rr in rows2:
+            for rr in rows2: 
                 aux_fill.append(rr)
         if len(aux_fill) > 0:
             data2 = np.rec.array(aux_fill,dtype=[(kw[0],'a50'),(kw[1],'i4')])
@@ -75,7 +72,7 @@ class Utility():
         else:
             return None
 
-
+    
     def data_status(self,unitname,reqnum,attnum,db='db-desoper',
                     mark='JUNK',modify=False):
         '''Method to call Michael's script to change the status of the files.
@@ -110,15 +107,17 @@ class Utility():
             ask.wait()
             print '\n',output[output.find('Current'):]
         except:
+            e = sys.exc_info()[0]
+            print "Error: {0}".format(e)
             aux = 'Error in calling datastate.py \
                 with {0} / {1} / {2}'.format(unitname,reqnum,attnum)
             logging.error(aux)
         return True
-
-
+    
+    
     def delete_junk(self,unitname,reqnum,attnum,filetype,pfw_attempt_id,
                     archive='desar2home',exclusion=None,del_opt='yes'):
-        '''
+        ''' 
         This method calls Doug's script, which deletes selected files,
         previously marked as JUNK. When number of files in DB differs from
         those in disk or if there was a problem in the deletion,
@@ -131,7 +130,7 @@ class Utility():
         - exclusion: list of filetypes to be excluded from deletion
         - del_opt: asnwer to the script, options are yes/no/diff/print
         Returns:
-        - list of filetypes and pfw_attempt_ids which causes problems in
+        - list of filetypes and pfw_attempt_ids which causes problems in 
         deleting or has different number of entries in disk and in DB
         '''
         print '========DEL unit/req/att/filetype : {0}/{1}/{2}/{3}\n'.format(
@@ -154,9 +153,9 @@ class Utility():
                 outM,errM = pB.communicate(input=del_opt)
                 pB.wait()
                 tmp = outM.replace('=','').replace('\n',' ').split()
-                Ndisk = tmp[[i+1 for i,x in enumerate(tmp)
+                Ndisk = tmp[[i+1 for i,x in enumerate(tmp) 
                         if (x=='disk' and tmp[i-1]=='from')][0]]
-                Ndb = tmp[[i+1 for i,x in enumerate(tmp)
+                Ndb = tmp[[i+1 for i,x in enumerate(tmp) 
                         if (x=='db' and tmp[i-1]=='from')][0]]
                 Ndisk,Ndb = np.int(Ndisk),np.int(Ndb)
                 if ((Ndb != Ndisk) or ('No files on disk' in outM)):
@@ -164,10 +163,12 @@ class Utility():
                     checkThis.append((filetype,pfw_attempt_id,
                                     'db and disk differs'))
             except:
-                print (filetype,pfw_attempt_id,'not found')
+                e = sys.exc_info()[0]
+                print "Error: {0}".format(e)
+                print (filetype,pfw_attempt_id,'ERROR')
                 checkThis.append((filetype,pfw_attempt_id,
                                 'problem deleting this filetype'))
-
+            
         else:
             if filetype not in exclusion:
                 try:
@@ -179,9 +180,9 @@ class Utility():
                     outM,errM = pC.communicate(input=del_opt)
                     pC.wait()
                     tmp = outM.replace('=','').replace('\n',' ').split()
-                    Ndisk = tmp[[i+1 for i,x in enumerate(tmp)
+                    Ndisk = tmp[[i+1 for i,x in enumerate(tmp) 
                             if (x=='disk' and tmp[i-1]=='from')][0]]
-                    Ndb = tmp[[i+1 for i,x in enumerate(tmp)
+                    Ndb = tmp[[i+1 for i,x in enumerate(tmp) 
                             if (x=='db' and tmp[i-1]=='from')][0]]
                     Ndisk,Ndb = np.int(Ndisk),np.int(Ndb)
                     if ((Ndb != Ndisk) or ('No files on disk' in outM)):
@@ -189,14 +190,16 @@ class Utility():
                         checkThis.append((filetype,pfw_attempt_id,
                                         'db and disk differs'))
                 except:
-                    print (filetype,pfw_attempt_id,'not found')
+                    e = sys.exc_info()[0]
+                    print "Error: {0}".format(e)
+                    print (filetype,pfw_attempt_id,'ERROR')
                     checkThis.append((filetype,pfw_attempt_id,
                                     'problem deleting this filetype'))
             else:
                 print 'Filetype not allowed to be erased: {0}'.format(filetype)
         return checkThis
-
-
+    
+    
     def do_job(self,reqnum,usernm,keep=None,remove=True):
         '''Wrapper to call the change status and deletion
         Inputs:
@@ -258,4 +261,4 @@ if __name__=='__main__':
         toCall.do_job(req,'fpazch') #keepfiles
 
     print time.ctime()
-    print '\n (THE END)'
+    print '\n (THE END)'  

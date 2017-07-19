@@ -123,7 +123,7 @@ class Utility():
         cmd += " --unitname {0}".format(unitname)
         cmd += " --reqnum {0}".format(reqnum)
         cmd += " --attnum {0}".format(attnum)
-        cmd += " --archive={0}".format(archive)
+        cmd += " --archive {0}".format(archive)
         cmd = shlex.split(cmd)
         try:
             pB = subprocess.Popen(cmd,shell=False,
@@ -143,7 +143,9 @@ class Utility():
                 print (reqnum,"db and disk differs")
                 checkThis.append((reqnum,"db and disk differs"))
         except:
-            print (reqnum,"not found")
+            e = sys.exc_info()[0]
+            print "Error: {0}".format(e)
+            print (reqnum,"ERROR")
             checkThis.append((reqnum,"problem deleting reqnum"))
         return checkThis
     
