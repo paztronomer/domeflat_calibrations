@@ -1,4 +1,5 @@
-# bergamota (*devel*)
+# flat_wise
+# ex:bergamota (*devel*)
 té con bergamota, backups de devel
 
 Scripts for Discrete Wavelet Transform to be used in dome flats, to deal with crosstalk, and auxiliary for this two main tasks.

@@ -38,17 +38,17 @@ class Mask():
             np.save(fn_mask,tmp_mask)
         return tmp_mask
 
-    @classmethod
+    @classmethod 
     def scaling(cls,base,target):
         '''Receives a base mask and emulates its shape on the
-        target array, using geometric scaling and nearest neighbor
+        target array, using geometric scaling and nearest neighbor 
         interpolation
         '''
-        #options:
-        # scipy.interpolate.interpn
+        #options: 
+        # scipy.interpolate.interpn  
         # scipy.interpolate.RegularGridInterpolator
         # scipy.interpolate.NearestNDInterpolator
-
+        
         #coordiantes of the base mask
         x,y = np.arange(0,base.shape[1]),np.arange(0,base.shape[0])
         #defines an interpolator object
@@ -59,14 +59,15 @@ class Mask():
         #value are outside the base/target scaling dimensions
         ratio0 = (base.shape[0]-1.)/np.float(target.shape[0]-1.)
         ratio1 = (base.shape[1]-1.)/np.float(target.shape[1]-1.)
-        #by multiplying indice by this ratios, will get the equivalent in
+        #by multiplying indice by this ratios, will get the equivalent in 
         #the base mask dimension
         xaux,yaux = np.arange(0,target.shape[1]),np.arange(0,target.shape[0])
         xaux,yaux = ratio1*xaux,ratio0*yaux
-        #at this point, just as double check, see if the maximum value is
+        #at this point, just as double check, see if the maximum value is 
         #out of bounds
-        if (max(xaux) - (base.shape[1]-1.)) > 1: xaux[-1] = (base.shape[1]-1.)
-        if (max(yaux) - (base.shape[0]-1.)) > 1: yaux[-1] = (base.shape[0]-1.)
+        #issue: even when are the same number, True is triggered
+        if (np.max(xaux) > base.shape[1]-1.): xaux[-1] = base.shape[1]-1.
+        if (np.max(yaux) > base.shape[0]-1.): yaux[-1] = base.shape[0]-1.
         #construct the grid for interpolation
         xaux,yaux = np.meshgrid(xaux,yaux)
         cooaux = np.array(zip(yaux.ravel(),xaux.ravel()))
@@ -83,10 +84,10 @@ class Mask():
         #clean the interpolator
         intObj = None
         return Maux
-
+    
     @classmethod
     def cAHV_mask(cls,h5table,savemask=False):
-        '''Method to construct a mask and save it. Once the mask is saved as
+        '''Method to construct a mask and save it. Once the mask is saved as 
         a numpy file, this method can be safely erased
         '''
         cA = [row['c_A'] for row in h5table.iterrows()]
@@ -96,7 +97,7 @@ class Mask():
         ca_fakeH = np.zeros(cA_model.shape,dtype=np.bool)
         ca_fakeV = np.zeros(cA_model.shape,dtype=np.bool)
         ca_fakeD = np.zeros(cA_model.shape,dtype=np.bool)
-        #analyze this coordinates
+        #analyze this coordinates 
         aux = [[30,86],[30,54],[38,46],[46,38],[62,30]]
         #[x0,y0,x1,y1]
         aux_H = [[67,117,70,118],
