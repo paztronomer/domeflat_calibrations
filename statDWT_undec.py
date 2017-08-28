@@ -31,12 +31,17 @@ import astroML
 #import y4g1g2g3_flatDWT as y4
 #import scalMask_dflat as scalMask
 
+#
+# PENDING
+# - tabulate statistics
+#
+
 
 class Toolbox():
     @classmethod
     def polygon_area(cls,x_arr,y_arr):
         """uses shoelace algorithm or Gauss area formula to get the polygon
-        area by sucessive triangulation. Sets of coordinates don"t need to be
+        area by sucessive triangulation. Sets of coordinates do not need to be
         sorted
         """
         A = 0.5*np.abs(np.dot(x_arr,np.roll(y_arr,1))-
@@ -227,6 +232,10 @@ class Toolbox():
         astroML.stats.fit_bivariate_normal(x, y, robust=False)
         exit()
 
+        #
+        # HERE
+        # HERE HERE!
+        #
         out = []
         nitem = 11
         labcoeff = ["H","V","D"]
@@ -431,10 +440,13 @@ class Call():
                 print type(val),val
                 if (not isinstance(val,float)):
                     y1 = Toolbox.value_dispers_undec(val)
-                    #y2 = Toolbox.posit_dispers()
+                    # y2 = Toolbox.posit_dispers()
         #if non nan, run stat
         exit(0)
 
+        #
+        # HERE, HERE HERE
+        #
 
         #the statistics of the values and positions for the RMS-selected peaks
         sel,frame_shape = Screen.inner_region(table)
