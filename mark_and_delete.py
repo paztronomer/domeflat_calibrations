@@ -196,15 +196,21 @@ class Utility():
 if __name__ == "__main__":
     """for deletion, must run in desar2... warning!!!
     """
+    #
+    # Add a control flow asking to continue or exit, showing the data to be
+    # searched for deletion
+    #
+
     #Add argparse
     #
     print "Starting!"
-    reqnum_list = [2877]
-    #[2907,2908,2920]
-    #[2863,2864,2865,2866,2867,2868,2869,2870,2871,2872,2873,2874,2875]
-    #[2623,2625,2743,2748,2751,2756,2769,2776,2777,2782,2783,2807,2808]
+    reqnum_list = [3022]
+    # [2877]
+    # [2907,2908,2920]
+    # [2863,2864,2865,2866,2867,2868,2869,2870,2871,2872,2873,2874,2875]
+    # [2623,2625,2743,2748,2751,2756,2769,2776,2777,2782,2783,2807,2808]
     for rq in reqnum_list:
-        kw = {"user_db":"fpazch","attnum":[1,2,3,4],"mark_junk":True}
+        kw = {"user_db":"fpazch","attnum":[4],"mark_junk":True}
         kw["delete"] = True
         kw["reqnum"] = rq
         Utility().caller1(**kw)
