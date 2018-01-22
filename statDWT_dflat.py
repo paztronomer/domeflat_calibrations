@@ -1166,8 +1166,10 @@ if __name__=='__main__':
     '''
     if True:
         #remember to change-------------
-        nite_range = [20160813,20170223]
-        tag = 'y4'
+        # nite_range = [20160813,20170223]
+        # tag = 'y4'
+        nite_range = [20170815, 20180113]
+        tag = "y5"
         #using 3RMS as the threshold!
         #-------------------------------
         band_range,expnum_range = Toolbox.band_expnum(nite_range)
