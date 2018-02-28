@@ -428,8 +428,10 @@ if __name__=='__main__':
         #yXn = [20160813,20170212] 
         #yXn = [20160813,20170218]
         #yXn = [20150813,20160810]
-        yXn = [20161216,20170223]
-        label = 'y4'
+        # yXn = [20161216,20170223]
+        # label = 'y4'
+        yXn = [20170815, 20180113]
+        label = "y5"
         print '\n===\t===\n\tStarting with {0}, {1}\n'.format(label.upper(),yXn)
         #run for every group and save as H5 table files
         #columns:  q.filename,q.factor,q.rms,q.worst,m.pfw_attempt_id,
