@@ -206,25 +206,29 @@ class Toolbox():
         return outtab
 
     @classmethod
-    def niterange(cls, niterange):
+    def niterange(cls, niterange, req, att):
         '''Method to ask the DB for some relevant information to run 
         this script over a range of nights. This method also query for
         basic information to be included in the HDF5 table
         '''
         N1, N2 = niterange
-        query = "select n.filename, q.factor, q.rms, q.worst, m.pfw_attempt_id, "
-        query += "    m.band, m.nite, q.expnum, pfw.reqnum, i.path"
-        query += " from flat_qa q, miscfile m, miscfile n, file_archive_info i, "
-        query += "    pfw_attempt pfw"
-        query += "    where q.filename=m.filename"
+        query = "select n.filename, q.factor, q.rms, q.worst,"
+        query += "    m.pfw_attempt_id, m.band, m.nite, q.expnum,"
+        query += "    pfw.reqnum, i.path"
+        query += " from flat_qa q, miscfile m, miscfile n,"
+        query += "    file_archive_info i, pfw_attempt pfw"
+        query += " where q.filename=m.filename"
         query += "    and n.filename=i.filename"
         query += "    and m.nite between {0} and {1}".format(N1, N2)
         query += "    and m.pfw_attempt_id=pfw.id"
+        query += "    and pfw.reqnum={0}".format(req)
+        query += "    and pfw.attnum in ({0})".format(','.join(map(str, att)))
         query += "    and m.filetype='compare_dflat_binned_fp'"
         query += "    and m.pfw_attempt_id=n.pfw_attempt_id"
         query += "    and m.expnum=n.expnum"
         query += "    and n.filetype='pixcor_dflat_binned_fp'"
-        datatype = ['a100', 'f4', 'f4', 'f4', 'i4', 'a10', 'i4', 'i4', 'i4', 'a100']
+        datatype = ['a100', 'f4', 'f4', 'f4', 'i4', 'a10', 'i4', 'i4', 'i4', 
+                    'a100']
         tab = Toolbox.dbquery(query, datatype)
         return tab
 
@@ -448,13 +452,18 @@ if __name__=='__main__':
     t3 += ' results is only coded for 2 and 8 levels. See UNDECIMATED version'
     t3 += ' for a more flexible coding. Default: 2'
     wav.add_argument('-d', help=t3, metavar='', type=int, default=2)
+    t4 = 'Request number (reqnum) of the run to analyze'
+    wav.add_argument('-r', help=t4, metavar='', type=int)
+    t5 = 'Attempt number (attnum) associated to the reqnum to analyze. It can'
+    t5 += ' be given as a integer or as space-separated list'
+    wav.add_argument('-a', help=t5, metavar='', type=int)
     #
     wav = wav.parse_args()
     logging.info('Starting at {0}'.format(time.ctime()))
     logging.info('Starting with {0}, {1}'.format(label.upper(), yXn))
     # columns:  q.filename, q.factor, q.rms, q.worst, m.pfw_attempt_id, 
     # m.band, m.nite, q.expnum, i.path
-    dflat_tab = Toolbox.niterange(wav.night_range)
+    dflat_tab = Toolbox.niterange(wav.night_range, wav.r, wav.a)
     rootpath = '/archive_data/desarchive'
     outpath = wav.s
     count = 1
