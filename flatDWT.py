@@ -222,7 +222,15 @@ class Toolbox():
         query += "    and m.nite between {0} and {1}".format(N1, N2)
         query += "    and m.pfw_attempt_id=pfw.id"
         query += "    and pfw.reqnum={0}".format(req)
-        query += "    and pfw.attnum in ({0})".format(','.join(map(str, att)))
+        if isinstance(att, list):
+            query += "    and pfw.attnum in ({0})".format(
+                ','.join(map(str, att))
+                )
+        elif isinstance(att, int):
+           query += "    and pfw.attnum in ({0})".format(att) 
+        else:
+            logging.error('Attnum must be either integer or list of integers')
+            exit(1)
         query += "    and m.filetype='compare_dflat_binned_fp'"
         query += "    and m.pfw_attempt_id=n.pfw_attempt_id"
         query += "    and m.expnum=n.expnum"
@@ -460,7 +468,7 @@ if __name__=='__main__':
     #
     wav = wav.parse_args()
     logging.info('Starting at {0}'.format(time.ctime()))
-    logging.info('Starting with {0}, {1}'.format(label.upper(), yXn))
+    logging.info('Starting with {0}, {1}'.format(wav.l, wav.night_range))
     # columns:  q.filename, q.factor, q.rms, q.worst, m.pfw_attempt_id, 
     # m.band, m.nite, q.expnum, i.path
     dflat_tab = Toolbox.niterange(wav.night_range, wav.r, wav.a)
