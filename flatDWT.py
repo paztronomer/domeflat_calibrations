@@ -487,7 +487,7 @@ if __name__=='__main__':
         #init table
         fnout = outpath
         fnout += dflat_tab['filename'][k][:dflat_tab['filename'][k].find('pixcor')]
-        fnout += label + '.h5'
+        fnout += wav.l + '.h5'
         Coeff.set_table(fnout, decLev)
         #fill table
         Coeff.fill_table(c_ml, decLev, binfo)
