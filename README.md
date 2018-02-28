@@ -2,7 +2,7 @@
 # ex:bergamota (*devel*)
 té con bergamota, backups de devel
 
-Scripts for Discrete Wavelet Transform to be used in dome flats, to deal with crosstalk, and auxiliary for this two main tasks.
+Scripts for Discrete Wavelet Transform to be used in dome flats, to deal with crosstalk, and auxiliary for this two main tasks. Written for Python 2.7, but easily adaptable for 3. When doing that, be aware of changes in **pandas** and other modules.
 
 **Main:**
 * crosstalk_FP.py: perform crosstalk		

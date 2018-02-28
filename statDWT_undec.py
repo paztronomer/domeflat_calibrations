@@ -157,14 +157,14 @@ class Toolbox():
         mout = np.zeros_like(m1,dtype=bool)
         mout[np.where(np.logical_or(m1,m2))] = True
         return mout,m2
-    
+
     @classmethod
     def lower_cut(cls,arr,threshold):
         """method to apply a threshold on data, discarding lower values
         Inputs
         - arr: 2D array of values
         - threshold: value to apply as lowercut
-        Returns 
+        Returns
         - the mask of the selected values
         """
         aux = np.zeros_like(arr,dtype=bool)
@@ -178,7 +178,7 @@ class Toolbox():
     def value_dispers_undec(cls,sval):
         """Method to estimate dispersion in the values of the clustered points.
         Not related to the position, but to the power.
-        For the entropy, we"ll use the values as unnormalized probabilities
+        For the entropy, we will use the values as unnormalized probabilities
         Intputs
         - list of values for a single direction of decomposition, for a single
         level. Only the power values, not further info
@@ -205,7 +205,7 @@ class Toolbox():
         #http://scikit-learn.org/stable/supervised_learning.html#supervised-learning
         #astroml
         #
-        
+
         """Method to evaluate the spatial behavior of the detected peaks.
         Intput: tuple with one tuple per level containing 3 elements each level.
         Inside each of the 3 elements (H,V,and D) are:
@@ -288,13 +288,13 @@ class Screen():
     def inner_region_undec(cls,h5table,mincluster=3):
         """Modified version of  inner_region() for undecimated results
         Returns:
-        - list with 4 depth levels 
+        - list with 4 depth levels
         [[[(),    ...    , ()],   [],     []  ],[   ] ...]
-          thres1, ...  ,thresn   
+          thres1, ...  ,thresn
                  cA_lev1       cA_lev2  cA_lev3
                            cA
         - list with 3 depth levels, 1st AHVD coeffs, 2nd levels 1,2,3, and
-        3rd values 1,2,3,4. These inner tuples contains gral information 
+        3rd values 1,2,3,4. These inner tuples contains gral information
         of the overall non-filtered DWT
         """
         gc.collect()
@@ -414,67 +414,41 @@ class Call():
         """
         header = h5tab.attrs.DB_INFO
         print header
-        """option: execute the statistics without masking, because no weird 
+        """option: execute the statistics without masking, because no weird
         coeffs are generated on level 1 of decomposition. But in level 2 and 3
         must be a little more cautious
         """
         #values of statistics for non-filtered coeffs, and positions/values
-        #for filtered coeffs. vX is a list of a tuple per level, clX is a 
+        #for filtered coeffs. vX is a list of a tuple per level, clX is a
         #per level, with 2 more levels: one per threshold and other (a tuple)
         #of the grouping values
-        [vA,vH,vV,vD],[clA,clH,clV,clD] = Screen.inner_region_undec(h5tab)
+        [vA, vH, vV, vD], [clA, clH, clV, clD] = Screen.inner_region_undec(h5tab)
         """apply  the statistics to all the directions (AHVD), levels (1,2,3)
         and thresholds (1-3 x RMS), to the selected points and coordiantes
         """
         #save different files for different thresholds or a 3D array
         #
         #first test for cA and then expand to the other directions
-        for lev in clA:
-            for threshold in lev:
-                coo,val,categ,label = threshold
+        for idxA, lev in enumerate(clA):
+            for idxB, threshold in enumerate(lev):
+                coo, val, categ, label = threshold
                 #inside each threshold tuple there are 4 elements:
                 #- coordinates of thresholded coeffs:coo
                 #- values of the theresholded coeffs:val
                 #- categories of the thresholded coeffs:categ
                 #- labels of the thresholded coeffs:cl_label
-                print type(val),val
-                if (not isinstance(val,float)):
+                print "_" * 30, idxA, idxB
+                print "=" * 30, threshold, "=" * 30
+                print "coo, val, categ, label : {0}, {1}, {2}, {3}".format(
+                    coo, val, categ, label)
+                if ((~isinstance(val, float)) and (~np.all(np.isnan(val)))):
                     y1 = Toolbox.value_dispers_undec(val)
                     # y2 = Toolbox.posit_dispers()
         #if non nan, run stat
-        exit(0)
-
         #
-        # HERE, HERE HERE
+        # Here continue with the selected threshold
         #
-
-        #the statistics of the values and positions for the RMS-selected peaks
-        sel,frame_shape = Screen.inner_region(table)
-        statVal = Toolbox.value_dispers(sel)
-        statPos = Toolbox.posit_dispers(sel,frame_shape)
-        #column names where v. stands for values, p. for positions, and db. for
-        #DES database
-        col = ["db.nite","db.expnum","db.band","db.reqnum","db.pfw_attempt_id"]
-        col += ["db.filename","db.factor","db.rms","db.worst"]
-        col += ["v.level","v.coeff","v.rms_all","v.uncert_all","v.mean",
-        "v.median","v.stdev","v.rms","v.uncert","v.min","v.max","v.mad",
-        "v.entropy","v.nclust","v.npeak","v.ratio"]
-        col += ["p.level","p.coeff","p.mean","p.median","p.stdev","p.rms",
-        "p.uncert","p.min","p.max","p.mad","p.entropy"]
-        #saving iteratively for each level and each coeff
-        out_stat = []
-        #as the levels and amount of coefficients is the same for value_dispers
-        #and for posit_dispersion, then we can use one as ruler for the other
-        for i1 in xrange(len(statVal)):
-            tmp = [header["nite"],header["expnum"],header["band"],
-                header["reqnum"],header["pfw_attempt_id"],header["filename"],
-                header["factor"],header["rms"],header["worst"]]
-            tmp += statVal[i1]
-            tmp += statPos[i1]
-            out_stat.append(tmp)
-            tmp = []
-        df = pd.DataFrame(out_stat,columns=col)
-        return df
+        #
 
 
 if __name__=="__main__":
@@ -513,15 +487,15 @@ if __name__=="__main__":
                 #close open instances
                 H5tab.closetab()
                 table.close()
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
+
+
+
     exit(0)
 
     """Below is the past call"""
